@@ -19,12 +19,23 @@ data class WatchProgress(
 )
 
 @Serializable
+data class WatchlistItem(
+    val title: String,
+    val url: String,
+    val posterUrl: String? = null,
+    val apiName: String = "",
+    val tvType: String = "",
+    val addedTimestamp: Long = System.currentTimeMillis()
+)
+
+@Serializable
 data class AppSettings(
     val selectedProvider: String = "All",
     val pluginRepositories: List<String> = listOf("https://raw.githubusercontent.com/recloudstream/cloudstream-extensions/master/repo.json"),
     val subtitleLanguage: String = "English",
     val defaultQuality: String = "1080p",
     val watchHistory: List<WatchProgress> = emptyList(),
+    val watchlist: List<WatchlistItem> = emptyList(),
     val searchHistory: List<String> = emptyList(),
     val isDarkMode: Boolean = true
 )
@@ -74,6 +85,33 @@ object DesktopDataStore {
             settings.copy(watchHistory = updatedHistory)
         }
     }
+
+    fun removeFromHistory(url: String) {
+        updateSettings { settings ->
+            settings.copy(watchHistory = settings.watchHistory.filterNot { it.url == url })
+        }
+    }
+
+    fun clearHistory() {
+        updateSettings { settings -> settings.copy(watchHistory = emptyList()) }
+    }
+
+    fun addToWatchlist(item: WatchlistItem) {
+        updateSettings { settings ->
+            val updated = settings.watchlist.filterNot { it.url == item.url }.toMutableList()
+            updated.add(0, item)
+            settings.copy(watchlist = updated)
+        }
+    }
+
+    fun removeFromWatchlist(url: String) {
+        updateSettings { settings ->
+            settings.copy(watchlist = settings.watchlist.filterNot { it.url == url })
+        }
+    }
+
+    fun isInWatchlist(url: String): Boolean =
+        currentSettings.watchlist.any { it.url == url }
 
     fun saveSearchQuery(query: String) {
         val q = query.trim()

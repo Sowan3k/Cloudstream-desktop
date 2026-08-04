@@ -28,6 +28,7 @@ import androidx.compose.ui.window.Dialog
 import coil3.compose.SubcomposeAsyncImage
 import com.lagradost.cloudstream.desktop.plugins.DesktopPluginLoader
 import com.lagradost.cloudstream.desktop.storage.DesktopDataStore
+import com.lagradost.cloudstream.desktop.storage.WatchlistItem
 import com.lagradost.cloudstream.desktop.ui.components.MediaCard
 import com.lagradost.cloudstream.desktop.ui.navigation.DesktopScreen
 import com.lagradost.cloudstream.desktop.ui.navigation.SubtitleTrackInfo
@@ -60,6 +61,7 @@ fun ResultScreen(
     var selectedSeason by remember { mutableStateOf<Int?>(null) }
     var extractingEpisode by remember { mutableStateOf<Episode?>(null) }
     var hasAutoPlayed by remember { mutableStateOf(false) }
+    var isInWatchlist by remember { mutableStateOf(DesktopDataStore.isInWatchlist(url)) }
 
     // Extract links and either play directly or show quality picker
     fun extractAndPlay(episode: Episode? = null, targetResponse: LoadResponse? = loadResponse) {
@@ -375,13 +377,38 @@ fun ResultScreen(
                                         }
 
                                         OutlinedButton(
-                                            onClick = { /* TODO: bookmark */ },
+                                            onClick = {
+                                                val res = loadResponse
+                                                if (res != null) {
+                                                    if (isInWatchlist) {
+                                                        DesktopDataStore.removeFromWatchlist(url)
+                                                    } else {
+                                                        DesktopDataStore.addToWatchlist(
+                                                            WatchlistItem(
+                                                                title = res.name,
+                                                                url = url,
+                                                                posterUrl = res.posterUrl,
+                                                                apiName = apiName,
+                                                                tvType = res.type?.name ?: ""
+                                                            )
+                                                        )
+                                                    }
+                                                    isInWatchlist = !isInWatchlist
+                                                }
+                                            },
                                             shape = RoundedCornerShape(10.dp),
-                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                                            colors = if (isInWatchlist)
+                                                ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
+                                            else
+                                                ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
                                         ) {
-                                            Icon(Icons.Default.BookmarkBorder, null, modifier = Modifier.size(18.dp))
+                                            Icon(
+                                                if (isInWatchlist) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                                null,
+                                                modifier = Modifier.size(18.dp)
+                                            )
                                             Spacer(Modifier.width(6.dp))
-                                            Text("Watchlist")
+                                            Text(if (isInWatchlist) "Bookmarked" else "Watchlist")
                                         }
                                     }
                                 }
