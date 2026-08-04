@@ -210,11 +210,11 @@ fun HeroBanner(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(380.dp)
-                .clip(RoundedCornerShape(20.dp))
+                .height(340.dp)
+                .clip(RoundedCornerShape(16.dp))
                 .clickable { onItemClick(item) }
         ) {
-            // Backdrop
+            // Backdrop blurred background
             SubcomposeAsyncImage(
                 model = item.posterUrl,
                 contentDescription = item.name,
@@ -231,11 +231,11 @@ fun HeroBanner(
                 }
             )
 
-            // Gradient overlay left-to-right
+            // Dark gradient overlay left-to-right
             Box(
                 modifier = Modifier.fillMaxSize().background(
                     Brush.horizontalGradient(
-                        listOf(Color.Black.copy(alpha = 0.9f), Color.Transparent, Color.Black.copy(alpha = 0.3f))
+                        listOf(Color.Black.copy(alpha = 0.92f), Color.Black.copy(alpha = 0.65f), Color.Black.copy(alpha = 0.35f))
                     )
                 )
             )
@@ -244,33 +244,61 @@ fun HeroBanner(
             Box(
                 modifier = Modifier.fillMaxSize().background(
                     Brush.verticalGradient(
-                        listOf(Color.Transparent, Color.Transparent, Color.Black.copy(alpha = 0.7f))
+                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))
                     )
                 )
             )
 
-            // Content
-            Column(
+            // Main Content Row (Poster Cover Card + Title & Actions)
+            Row(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(28.dp)
-                    .fillMaxWidth(0.55f)
+                    .padding(24.dp)
+                    .fillMaxWidth(0.85f),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                val typeLabel = when (item.type) {
-                    TvType.Movie, TvType.AnimeMovie -> "MOVIE"
-                    TvType.TvSeries -> "TV SERIES"
-                    TvType.Anime -> "ANIME"
-                    TvType.Live -> "LIVE"
-                    else -> item.type?.name?.uppercase()
-                }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                // 1. Poster Cover Image Card
+                Surface(
+                    modifier = Modifier
+                        .width(135.dp)
+                        .height(200.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color(0xFF2C2C2C),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f))
                 ) {
+                    SubcomposeAsyncImage(
+                        model = item.posterUrl,
+                        contentDescription = item.name,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        error = {
+                            Box(
+                                modifier = Modifier.fillMaxSize().background(Color(0xFF242424)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Movie, null, tint = Color.White.copy(0.4f), modifier = Modifier.size(36.dp))
+                            }
+                        }
+                    )
+                }
+
+                Spacer(Modifier.width(20.dp))
+
+                // 2. Title & Details Column
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    val typeLabel = when (item.type) {
+                        TvType.Movie, TvType.AnimeMovie -> "MOVIE"
+                        TvType.TvSeries -> "TV SERIES"
+                        TvType.Anime -> "ANIME"
+                        TvType.Live -> "LIVE TV"
+                        else -> item.type?.name?.uppercase()
+                    }
                     if (typeLabel != null) {
                         Surface(
                             shape = RoundedCornerShape(4.dp),
-                            color = MaterialTheme.colorScheme.primary
+                            color = Color(0xFF0078D4)
                         ) {
                             Text(
                                 text = typeLabel,
@@ -280,38 +308,41 @@ fun HeroBanner(
                                 color = Color.White
                             )
                         }
+                        Spacer(Modifier.height(8.dp))
                     }
-                }
-                Spacer(Modifier.height(8.dp))
 
-                Text(
-                    text = item.name,
-                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
-                    color = Color.White,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+                    Text(
+                        text = item.name,
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
 
-                Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(14.dp))
 
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(
-                        onClick = { onItemClick(item) },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Play Now", color = Color.Black, fontWeight = FontWeight.Bold)
-                    }
-                    OutlinedButton(
-                        onClick = { onItemClick(item) },
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
-                    ) {
-                        Icon(Icons.Default.Info, null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Details")
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Button(
+                            onClick = { onItemClick(item) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Play Stream", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                        OutlinedButton(
+                            onClick = { onItemClick(item) },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                            border = BorderStroke(1.dp, Color.White.copy(0.4f)),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Icon(Icons.Default.Info, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Details", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        }
                     }
                 }
             }
@@ -329,7 +360,7 @@ fun HeroBanner(
                             .size(if (i == currentIndex) 20.dp else 6.dp, 6.dp)
                             .clip(RoundedCornerShape(3.dp))
                             .background(
-                                if (i == currentIndex) MaterialTheme.colorScheme.primary
+                                if (i == currentIndex) Color(0xFF0078D4)
                                 else Color.White.copy(alpha = 0.4f)
                             )
                             .clickable { currentIndex = i }

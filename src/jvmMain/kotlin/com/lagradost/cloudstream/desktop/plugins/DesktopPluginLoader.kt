@@ -86,7 +86,8 @@ object DesktopPluginLoader {
                 com.nehal.showtimebd.ShowTimeBDProvider(),
                 com.nehal.vegamovies.VegaMoviesProvider(),
                 com.allwish.AllWish(),
-                com.aniwatch.Aniwatch()
+                com.aniwatch.Aniwatch(),
+                com.cncverse.MovieBoxProviderIN()
             )
             registerBuiltInApis(providers)
             log("Registered ${providers.size} native BDIX providers successfully!")

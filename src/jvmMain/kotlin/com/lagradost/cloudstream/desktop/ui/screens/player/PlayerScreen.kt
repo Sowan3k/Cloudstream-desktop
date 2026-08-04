@@ -101,14 +101,7 @@ private fun tryConfigureVlc(): String? {
 }
 
 private fun toVlcMrl(url: String): String = try {
-    if (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)) {
-        val decoded = try { java.net.URLDecoder.decode(url, "UTF-8") } catch (_: Exception) { url }
-        val parsed = java.net.URI(decoded).toURL()
-        val uri = URI(parsed.protocol, parsed.userInfo, parsed.host, parsed.port, parsed.path, parsed.query, parsed.ref)
-        uri.toASCIIString()
-    } else {
-        url.replace(" ", "%20")
-    }
+    url.trim().replace(" ", "%20")
 } catch (_: Exception) {
     url.replace(" ", "%20")
 }
@@ -159,10 +152,20 @@ fun PlayerScreen(
         }
     }
     var currentEp by remember { mutableStateOf(currentEpisode) }
+    fun isAudioOnlySource(src: StreamSourceInfo): Boolean {
+        val uLower = src.url.lowercase()
+        val nLower = src.name.lowercase()
+        if (nLower.contains("audio track") || nLower.contains("audio-only")) return true
+        if (uLower.endsWith(".m4a") || uLower.endsWith(".aac") || uLower.endsWith(".mp3") || uLower.endsWith(".mka") || uLower.endsWith(".wav") || uLower.endsWith(".flac")) return true
+        if (uLower.contains(".audio.") || uLower.contains("/audio.")) return true
+        return false
+    }
+
     var activeEpisodeName by remember {
         mutableStateOf(episodeName ?: currentEpisode?.let { "S${it.season}E${it.episode}" })
     }
-    var activeSourcesList by remember { mutableStateOf(sources) }
+    val filteredSources = sources.filterNot { isAudioOnlySource(it) }.ifEmpty { sources }
+    var activeSourcesList by remember { mutableStateOf(filteredSources) }
     var activeSubtitlesList by remember { mutableStateOf(subtitles) }
     var isExtractingNextEp by remember { mutableStateOf(false) }
     var showEpisodesPicker by remember { mutableStateOf(false) }
@@ -486,11 +489,32 @@ fun PlayerScreen(
             isBuffering = true
             isPlaying = true
 
-            val safeUrl = toVlcMrl(activeSource.url)
+            val rawUrl = activeSource.url
+            val hasHeaders = activeSource.headers.isNotEmpty()
+            val playUrl = if (hasHeaders || rawUrl.contains(".mpd", ignoreCase = true) || rawUrl.contains("hakunaymatata", ignoreCase = true)) {
+                com.lagradost.cloudstream.desktop.utils.DesktopStreamProxy.getProxiedUrl(rawUrl, activeSource.headers)
+            } else {
+                toVlcMrl(rawUrl)
+            }
+
             val opts = buildList {
-                activeSource.headers.forEach { (k, v) -> add(":http-header-$k=$v") }
-                if (activeSource.headers.keys.none { it.equals("User-Agent", ignoreCase = true) }) {
-                    add(":http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+                activeSource.headers.forEach { (k, v) ->
+                    val keyLower = k.lowercase()
+                    when {
+                        keyLower == "referer" -> {
+                            add(":http-referrer=$v")
+                            add(":http-header=Referer: $v")
+                        }
+                        keyLower == "user-agent" -> {
+                            add(":http-user-agent=$v")
+                            add(":http-header=User-Agent: $v")
+                        }
+                        keyLower == "cookie" -> {
+                            add(":http-cookie=$v")
+                            add(":http-header=Cookie: $v")
+                        }
+                        else -> add(":http-header=$k: $v")
+                    }
                 }
                 add(":network-caching=3000")
                 add(":file-caching=3000")
@@ -498,11 +522,14 @@ fun PlayerScreen(
                 add(":http-reconnect=1")
                 add(":clock-jitter=0")
                 add(":clock-synchro=0")
+                if (playUrl.contains(".mpd", ignoreCase = true) || rawUrl.contains(".mpd", ignoreCase = true)) {
+                    add(":demux=adaptive")
+                }
             }.toTypedArray()
 
             try {
-                logVlc("Starting LibVLC MRL: $safeUrl (Resuming pos: ${savedPos}ms)")
-                player.media().play(safeUrl, *opts)
+                logVlc("Starting LibVLC MRL: $playUrl (Resuming pos: ${savedPos}ms)")
+                player.media().play(playUrl, *opts)
                 if (savedPos > 1000L) {
                     launch {
                         for (attempt in 1..10) {
@@ -672,8 +699,20 @@ fun PlayerScreen(
         try {
             val vlcPath = findVlcPath()
             val exe = if (vlcPath != null) File(vlcPath, "vlc.exe") else null
-            if (exe?.exists() == true) Runtime.getRuntime().exec(arrayOf(exe.absolutePath, activeSource.url))
-            else Desktop.getDesktop().browse(URI(activeSource.url))
+            if (exe?.exists() == true) {
+                val cmd = mutableListOf(exe.absolutePath, activeSource.url)
+                activeSource.headers.forEach { (k, v) ->
+                    when (k.lowercase()) {
+                        "referer" -> cmd.addAll(listOf("--http-referrer", v))
+                        "user-agent" -> cmd.addAll(listOf("--http-user-agent", v))
+                        "cookie" -> cmd.addAll(listOf("--http-cookie", v))
+                        else -> {} // skip other headers for external VLC
+                    }
+                }
+                Runtime.getRuntime().exec(cmd.toTypedArray())
+            } else {
+                Desktop.getDesktop().browse(URI(activeSource.url))
+            }
         } catch (_: Exception) { try { Desktop.getDesktop().browse(URI(activeSource.url)) } catch (_: Exception) {} }
     }
 

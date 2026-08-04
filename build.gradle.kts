@@ -30,7 +30,8 @@ kotlin {
                 "../nehal-CloudStream/FmFtp/src/main/kotlin",
                 "../nehal-CloudStream/JellyfinBD/src/main/kotlin",
                 "../nehal-CloudStream/ShowTimeBD/src/main/kotlin",
-                "../nehal-CloudStream/VegaMovies/src/main/kotlin"
+                "../nehal-CloudStream/VegaMovies/src/main/kotlin",
+                "../nehal-CloudStream/MovieBoxProviderIN/src/main/kotlin"
             )
             dependencies {
                 // CloudStream Core KMP Library

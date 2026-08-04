@@ -88,24 +88,51 @@ fun ResultScreen(
             isExtractingLinks = true
             val links = mutableListOf<ExtractorLink>()
             val subs = mutableListOf<SubtitleTrackInfo>()
+            fun isAudioOnly(link: ExtractorLink?): Boolean {
+                if (link == null) return false
+                val url = link.url ?: return false
+                val name = link.name ?: ""
+                val uLower = url.lowercase()
+                val nLower = name.lowercase()
+                if (nLower.contains("audio track") || nLower.contains("audio-only")) return true
+                if (uLower.endsWith(".m4a") || uLower.endsWith(".aac") || uLower.endsWith(".mp3") || uLower.endsWith(".mka") || uLower.endsWith(".wav") || uLower.endsWith(".flac")) return true
+                if (uLower.contains(".audio.") || uLower.contains("/audio.")) return true
+                return false
+            }
+
             try {
                 val episodeData = episode?.data
                     ?: (currentResponse as? MovieLoadResponse)?.dataUrl
                     ?: currentResponse.url
                 withContext(Dispatchers.IO) {
-                    api.loadLinks(
-                        data = episodeData,
-                        isCasting = false,
-                        subtitleCallback = { sub ->
-                            subs.add(SubtitleTrackInfo(url = sub.url, language = sub.lang))
-                        },
-                        callback = { link -> links.add(link) }
-                    )
+                    kotlinx.coroutines.withTimeoutOrNull(90_000L) {
+                        try {
+                            api.loadLinks(
+                                data = episodeData,
+                                isCasting = false,
+                                subtitleCallback = { sub ->
+                                    if (sub != null && !sub.url.isNullOrBlank()) {
+                                        subs.add(SubtitleTrackInfo(url = sub.url, language = sub.lang ?: "Subtitle"))
+                                    }
+                                },
+                                callback = { link ->
+                                    if (link != null && !link.url.isNullOrBlank()) {
+                                        links.add(link)
+                                    }
+                                }
+                            )
+                        } catch (_: Exception) {}
+                    }
                 }
-                fun rankLink(link: ExtractorLink): Int {
+
+                fun rankLink(link: ExtractorLink?): Int {
+                    if (link == null) return -999999
+                    val url = link.url ?: return -999999
                     var score = link.quality * 100
-                    val urlLower = link.url.lowercase().trimEnd('/')
-                    val nameLower = link.name.lowercase()
+                    val urlLower = url.lowercase().trimEnd('/')
+                    val nameLower = (link.name ?: "").lowercase()
+
+                    if (isAudioOnly(link)) score -= 100000
 
                     if (urlLower.endsWith(".mkv") || urlLower.endsWith(".mp4") || urlLower.endsWith(".m3u8") || urlLower.endsWith(".avi")) score += 10000
                     if (nameLower.contains("gb") || nameLower.contains("mb")) score += 5000
@@ -114,7 +141,10 @@ fun ResultScreen(
                     return score
                 }
 
-                val sortedLinks = links.sortedByDescending { rankLink(it) }
+                val nonNullLinks = links.filterNotNull().filter { !it.url.isNullOrBlank() }
+                val videoOnlyLinks = nonNullLinks.filterNot { isAudioOnly(it) }
+                val validLinks = videoOnlyLinks.ifEmpty { nonNullLinks }
+                val sortedLinks = validLinks.sortedByDescending { rankLink(it) }
                 extractedLinks = sortedLinks
                 subtitleTracks = subs
 
@@ -138,7 +168,7 @@ fun ResultScreen(
                             posterUrl = currentResponse.posterUrl,
                             headers = bestLink.headers,
                             subtitles = subs,
-                            sources = sortedLinks.map { com.lagradost.cloudstream.desktop.ui.navigation.StreamSourceInfo(name = it.name, url = it.url, quality = it.quality, headers = it.headers) },
+                            sources = sortedLinks.map { com.lagradost.cloudstream.desktop.ui.navigation.StreamSourceInfo(name = it.name ?: "Server", url = it.url, quality = it.quality, headers = it.headers) },
                             loadResponse = currentResponse,
                             currentEpisode = episode,
                             apiName = api.name
@@ -146,10 +176,36 @@ fun ResultScreen(
                         autoPlay
                     )
                 } else {
-                    errorMessage = "No playable links found."
+                    errorMessage = "No playable links found for this title."
                 }
             } catch (e: Exception) {
-                errorMessage = "Extraction failed: ${e.localizedMessage}"
+                val nonNullLinks = links.filterNotNull().filter { !it.url.isNullOrBlank() }
+                if (nonNullLinks.isNotEmpty()) {
+                    val videoOnlyLinks = nonNullLinks.filterNot { isAudioOnly(it) }
+                    val sortedLinks = videoOnlyLinks.ifEmpty { nonNullLinks }
+                    if (sortedLinks.isNotEmpty()) {
+                        val bestLink = sortedLinks.first()
+                        onNavigate(
+                            DesktopScreen.Player(
+                                mediaUrl = bestLink.url,
+                                title = currentResponse.name,
+                                episodeName = episode?.let { ep -> "S${ep.season ?: 1}E${ep.episode ?: 1}" },
+                                posterUrl = currentResponse.posterUrl,
+                                headers = bestLink.headers,
+                                subtitles = subs,
+                                sources = sortedLinks.map { com.lagradost.cloudstream.desktop.ui.navigation.StreamSourceInfo(name = it.name ?: "Server", url = it.url, quality = it.quality, headers = it.headers) },
+                                loadResponse = currentResponse,
+                                currentEpisode = episode,
+                                apiName = api.name
+                            ),
+                            autoPlay
+                        )
+                    } else {
+                        errorMessage = "Extraction failed: ${e.localizedMessage}"
+                    }
+                } else {
+                    errorMessage = "Extraction failed: ${e.localizedMessage}"
+                }
             } finally {
                 isExtractingLinks = false
             }

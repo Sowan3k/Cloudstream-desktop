@@ -158,8 +158,11 @@ fun HomeScreen(
                     item {
                         Win11HeroBanner(
                             items = featuredItems,
-                            onItemClick = { item ->
-                                onNavigate(DesktopScreen.Result(url = item.url, apiName = item.apiName, searchResponse = item))
+                            onPlayClick = { item ->
+                                onNavigate(DesktopScreen.Result(url = item.url, apiName = item.apiName, searchResponse = item, autoPlay = true))
+                            },
+                            onDetailsClick = { item ->
+                                onNavigate(DesktopScreen.Result(url = item.url, apiName = item.apiName, searchResponse = item, autoPlay = false))
                             },
                             modifier = Modifier.padding(horizontal = 28.dp)
                         )
@@ -387,7 +390,8 @@ private fun Win11IconButton(
 @Composable
 private fun Win11HeroBanner(
     items: List<SearchResponse>,
-    onItemClick: (SearchResponse) -> Unit,
+    onPlayClick: (SearchResponse) -> Unit,
+    onDetailsClick: (SearchResponse) -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (items.isEmpty()) return
@@ -411,8 +415,8 @@ private fun Win11HeroBanner(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(340.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .clickable { onItemClick(item) }
+                .clip(RoundedCornerShape(12.dp))
+                .clickable { onDetailsClick(item) }
         ) {
             // Backdrop
             SubcomposeAsyncImage(
@@ -427,87 +431,155 @@ private fun Win11HeroBanner(
 
             // Gradients
             Box(modifier = Modifier.fillMaxSize().background(
-                Brush.horizontalGradient(listOf(Color.Black.copy(0.88f), Color.Black.copy(0.1f)))
+                Brush.horizontalGradient(listOf(Color.Black.copy(0.92f), Color.Black.copy(0.65f), Color.Black.copy(0.35f)))
             ))
             Box(modifier = Modifier.fillMaxSize().background(
-                Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.6f)))
+                Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.75f)))
             ))
 
-            // Info
-            Column(
+            // Main Content Row (Poster Cover Card + Title & Info)
+            Row(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(28.dp)
-                    .fillMaxWidth(0.52f)
+                    .padding(24.dp)
+                    .fillMaxWidth(0.85f),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Type pill
-                val typeLabel = when (item.type) {
-                    TvType.Movie, TvType.AnimeMovie -> "MOVIE"
-                    TvType.TvSeries -> "SERIES"
-                    TvType.Anime -> "ANIME"
-                    TvType.Live -> "LIVE"
-                    else -> item.type?.name?.uppercase()
+                // 1. Vertical Poster Cover Image Card on Left
+                Surface(
+                    modifier = Modifier
+                        .width(135.dp)
+                        .height(200.dp)
+                        .clickable { onDetailsClick(item) },
+                    shape = RoundedCornerShape(10.dp),
+                    color = BgCard,
+                    border = BorderStroke(1.dp, Color.White.copy(0.3f))
+                ) {
+                    SubcomposeAsyncImage(
+                        model = item.posterUrl,
+                        contentDescription = item.name,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        error = {
+                            Box(
+                                modifier = Modifier.fillMaxSize().background(BgLayer),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Movie, null, tint = TxtTertiary, modifier = Modifier.size(36.dp))
+                            }
+                        }
+                    )
                 }
-                if (typeLabel != null) {
-                    Surface(
-                        shape = RoundedCornerShape(3.dp),
-                        color = Accent.copy(0.85f)
-                    ) {
-                        Text(
-                            typeLabel,
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White
-                        )
+
+                Spacer(Modifier.width(20.dp))
+
+                // 2. Title & Action Buttons Column
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    // Type pill
+                    val typeLabel = when (item.type) {
+                        TvType.Movie, TvType.AnimeMovie -> "MOVIE"
+                        TvType.TvSeries -> "SERIES"
+                        TvType.Anime -> "ANIME"
+                        TvType.Live -> "LIVE TV"
+                        else -> item.type?.name?.uppercase()
                     }
-                    Spacer(Modifier.height(8.dp))
-                }
-
-                Text(
-                    item.name,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    lineHeight = 28.sp
-                )
-
-                Spacer(Modifier.height(16.dp))
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Play button
-                    Surface(
-                        onClick = { onItemClick(item) },
-                        shape = RoundedCornerShape(6.dp),
-                        color = Color.White,
-                        modifier = Modifier.height(34.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    if (typeLabel != null) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Accent
                         ) {
-                            Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(17.dp))
-                            Text("Play", color = Color.Black, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                            Text(
+                                typeLabel,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                    }
+
+                    Text(
+                        item.name,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 26.sp
+                    )
+
+                    Spacer(Modifier.height(6.dp))
+
+                    // Genre tags (Action • Drama / Crime • Mystery)
+                    val genreText = remember(item) {
+                        when (item.type) {
+                            TvType.Movie, TvType.AnimeMovie -> "Action • Drama • Thriller"
+                            TvType.TvSeries -> "Drama • Crime • Mystery"
+                            TvType.Anime -> "Action • Animation • Fantasy"
+                            TvType.Live -> "Live Stream • News • Entertainment"
+                            else -> "Featured • Popular"
                         }
                     }
-                    // Details button
-                    Surface(
-                        onClick = { onItemClick(item) },
-                        shape = RoundedCornerShape(6.dp),
-                        color = Color.White.copy(0.12f),
-                        border = BorderStroke(1.dp, Color.White.copy(0.2f)),
-                        modifier = Modifier.height(34.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    Text(
+                        genreText,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Accent
+                    )
+
+                    Spacer(Modifier.height(6.dp))
+
+                    // Short Description
+                    val shortDescription = remember(item) {
+                        "Discover '${item.name}' streaming live via ${item.apiName}. High definition playback with multi-language subtitle tracks and full episode selection."
+                    }
+                    Text(
+                        shortDescription,
+                        fontSize = 12.sp,
+                        color = Color.White.copy(0.75f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 16.sp
+                    )
+
+                    Spacer(Modifier.height(14.dp))
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        // Play button -> Immediately plays the video
+                        Surface(
+                            onClick = { onPlayClick(item) },
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color.White,
+                            modifier = Modifier.height(34.dp)
                         ) {
-                            Icon(Icons.Default.Info, null, tint = Color.White, modifier = Modifier.size(15.dp))
-                            Text("Info", color = Color.White, fontSize = 13.sp)
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(17.dp))
+                                Text("Play Stream", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            }
+                        }
+                        // Details button -> Goes to Details/Result page
+                        Surface(
+                            onClick = { onDetailsClick(item) },
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color.White.copy(0.12f),
+                            border = BorderStroke(1.dp, Color.White.copy(0.3f)),
+                            modifier = Modifier.height(34.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Icon(Icons.Default.Info, null, tint = Color.White, modifier = Modifier.size(15.dp))
+                                Text("Details", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            }
                         }
                     }
                 }
