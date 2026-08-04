@@ -100,9 +100,14 @@ private fun tryConfigureVlc(): String? {
 }
 
 private fun toVlcMrl(url: String): String = try {
-    // LibVLC expects an ASCII MRL. URI.toASCIIString() preserves an already
-    // encoded URL while encoding spaces and Unicode path characters such as ’.
-    URI(url.replace(" ", "%20")).toASCIIString()
+    if (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)) {
+        val decoded = try { java.net.URLDecoder.decode(url, "UTF-8") } catch (_: Exception) { url }
+        val parsed = java.net.URI(decoded).toURL()
+        val uri = URI(parsed.protocol, parsed.userInfo, parsed.host, parsed.port, parsed.path, parsed.query, parsed.ref)
+        uri.toASCIIString()
+    } else {
+        url.replace(" ", "%20")
+    }
 } catch (_: Exception) {
     url.replace(" ", "%20")
 }
@@ -426,7 +431,12 @@ fun PlayerScreen(
             val safeUrl = toVlcMrl(activeSource.url)
             val opts = buildList {
                 activeSource.headers.forEach { (k, v) -> add(":http-header-$k=$v") }
-                add(":network-caching=2500")
+                if (activeSource.headers.keys.none { it.equals("User-Agent", ignoreCase = true) }) {
+                    add(":http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+                }
+                add(":network-caching=3000")
+                add(":file-caching=3000")
+                add(":live-caching=3000")
                 add(":http-reconnect=1")
                 add(":clock-jitter=0")
                 add(":clock-synchro=0")
