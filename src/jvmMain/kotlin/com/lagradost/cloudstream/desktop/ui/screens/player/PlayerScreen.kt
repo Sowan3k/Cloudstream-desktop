@@ -191,14 +191,28 @@ fun PlayerScreen(
     val initialPosition = remember {
         val targetUrl = loadResponse?.url ?: mediaUrl
         val cleanTitle = title.trim().lowercase()
+        val epObj = currentEpisode ?: (if (currentEpIndex != -1) allEpisodes.getOrNull(currentEpIndex) else null)
+        val targetSeason = epObj?.season
+        val targetEpisode = epObj?.episode
+
         val historyMatch = DesktopDataStore.currentSettings.watchHistory.firstOrNull { h ->
             val hUrl = h.url.trim().lowercase()
             val hTitle = h.title.trim().lowercase()
             val tUrl = targetUrl.trim().lowercase()
             val mUrl = mediaUrl.trim().lowercase()
             val sUrl = activeSource.url.trim().lowercase()
-            hUrl == tUrl || hUrl == mUrl || hUrl == sUrl ||
-            hTitle.contains(cleanTitle) || cleanTitle.contains(hTitle)
+
+            val urlOrTitleMatch = (hUrl == tUrl || hUrl == mUrl || hUrl == sUrl ||
+                    hTitle == cleanTitle ||
+                    (cleanTitle.length > 5 && hTitle.startsWith(cleanTitle)))
+
+            if (targetSeason != null && targetEpisode != null) {
+                urlOrTitleMatch && h.seasonIndex == targetSeason && h.episodeIndex == targetEpisode
+            } else if (!episodeName.isNullOrBlank()) {
+                urlOrTitleMatch && (h.title.contains(episodeName, ignoreCase = true) || hTitle.contains(episodeName.lowercase()))
+            } else {
+                urlOrTitleMatch
+            }
         }
         if (historyMatch != null && historyMatch.positionMillis > 3000L) {
             if (historyMatch.durationMillis <= 0 || (historyMatch.durationMillis - historyMatch.positionMillis) > 10000L) {
@@ -496,6 +510,7 @@ fun PlayerScreen(
                 // Periodic Watch Progress save (every ~5 seconds)
                 if (pos > 3000L && dur > 10_000L && (pos % 5000L < 600L)) {
                     val resolvedPoster = posterUrl ?: loadResponse?.posterUrl
+                    val epObj = currentEpisode ?: (if (currentEpIndex != -1) allEpisodes.getOrNull(currentEpIndex) else null)
                     DesktopDataStore.saveWatchProgress(
                         WatchProgress(
                             title = title + (activeEpisodeName?.let { if (it.isNotBlank()) " — $it" else "" } ?: ""),
@@ -503,6 +518,8 @@ fun PlayerScreen(
                             posterUrl = resolvedPoster,
                             positionMillis = pos,
                             durationMillis = dur,
+                            episodeIndex = epObj?.episode,
+                            seasonIndex = epObj?.season,
                             apiName = loadResponse?.apiName ?: apiName
                         )
                     )
@@ -568,6 +585,7 @@ fun PlayerScreen(
                 factoryAndPlayer?.first?.release()
             } catch (_: Exception) {}
             val resolvedPoster = posterUrl ?: loadResponse?.posterUrl
+            val epObj = currentEpisode ?: (if (currentEpIndex != -1) allEpisodes.getOrNull(currentEpIndex) else null)
             DesktopDataStore.saveWatchProgress(
                 WatchProgress(
                     title = title + (episodeName?.let { " — $it" } ?: ""),
@@ -575,6 +593,8 @@ fun PlayerScreen(
                     posterUrl = resolvedPoster,
                     positionMillis = currentPosition,
                     durationMillis = totalDuration,
+                    episodeIndex = epObj?.episode,
+                    seasonIndex = epObj?.season,
                     apiName = loadResponse?.apiName ?: apiName
                 )
             )
