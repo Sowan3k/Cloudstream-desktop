@@ -1,0 +1,17 @@
+# Gradle & Build outputs
+.gradle/
+build/
+bin/
+out/
+.kotlin/
+
+# IDE files
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+
+# OS generated files
+.DS_Store
+Thumbs.db
