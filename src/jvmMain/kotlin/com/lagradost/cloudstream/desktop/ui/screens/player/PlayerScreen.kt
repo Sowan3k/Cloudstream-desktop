@@ -167,9 +167,26 @@ fun PlayerScreen(
     var showEpisodesPicker by remember { mutableStateOf(false) }
 
     val currentEpIndex = remember(currentEp, activeEpisodeName, allEpisodes) {
-        allEpisodes.indexOfFirst { ep ->
-            (currentEp != null && ep.data == currentEp?.data) ||
-            (activeEpisodeName != null && (ep.name == activeEpisodeName || "S${ep.season}E${ep.episode}" == activeEpisodeName))
+        if (allEpisodes.isEmpty()) -1
+        else {
+            val byData = allEpisodes.indexOfFirst { ep -> currentEp != null && (ep == currentEp || ep.data == currentEp?.data) }
+            if (byData != -1) byData
+            else if (currentEp?.season != null && currentEp?.episode != null) {
+                val bySeasonEp = allEpisodes.indexOfFirst { ep -> ep.season == currentEp?.season && ep.episode == currentEp?.episode }
+                if (bySeasonEp != -1) bySeasonEp
+                else allEpisodes.indexOfFirst { ep -> ep.episode == currentEp?.episode }
+            } else if (!activeEpisodeName.isNullOrBlank()) {
+                val match = Regex("""S(\d+)E(\d+)""", RegexOption.IGNORE_CASE).find(activeEpisodeName!!)
+                val sNum = match?.groupValues?.get(1)?.toIntOrNull()
+                val eNum = match?.groupValues?.get(2)?.toIntOrNull()
+                if (sNum != null && eNum != null) {
+                    val byParsed = allEpisodes.indexOfFirst { ep -> ep.season == sNum && ep.episode == eNum }
+                    if (byParsed != -1) byParsed
+                    else allEpisodes.indexOfFirst { ep -> ep.episode == eNum }
+                } else {
+                    allEpisodes.indexOfFirst { ep -> ep.name == activeEpisodeName }
+                }
+            } else -1
         }
     }
     val hasPrevEpisode = allEpisodes.isNotEmpty() && currentEpIndex > 0
@@ -274,7 +291,15 @@ fun PlayerScreen(
                 if (sortedLinks.isNotEmpty()) {
                     val best = sortedLinks.first()
                     currentEp = ep
-                    activeEpisodeName = ep.name ?: "S${ep.season}E${ep.episode}"
+                    val epCode = "S${ep.season ?: 1}E${ep.episode ?: 1}"
+                    val epNameStr = ep.name
+                    activeEpisodeName = if (!epNameStr.isNullOrBlank() && !epNameStr.contains(epCode, ignoreCase = true)) {
+                        "$epCode — $epNameStr"
+                    } else if (!epNameStr.isNullOrBlank()) {
+                        epNameStr
+                    } else {
+                        epCode
+                    }
                     val newSources = sortedLinks.map { StreamSourceInfo(name = it.name, url = it.url, quality = it.quality, headers = it.headers) }
                     activeSourcesList = newSources
                     activeSubtitlesList = subs
@@ -510,7 +535,7 @@ fun PlayerScreen(
                 // Periodic Watch Progress save (every ~5 seconds)
                 if (pos > 3000L && dur > 10_000L && (pos % 5000L < 600L)) {
                     val resolvedPoster = posterUrl ?: loadResponse?.posterUrl
-                    val epObj = currentEpisode ?: (if (currentEpIndex != -1) allEpisodes.getOrNull(currentEpIndex) else null)
+                    val epObj = currentEp ?: (if (currentEpIndex != -1) allEpisodes.getOrNull(currentEpIndex) else null) ?: currentEpisode
                     DesktopDataStore.saveWatchProgress(
                         WatchProgress(
                             title = title + (activeEpisodeName?.let { if (it.isNotBlank()) " — $it" else "" } ?: ""),
@@ -585,10 +610,10 @@ fun PlayerScreen(
                 factoryAndPlayer?.first?.release()
             } catch (_: Exception) {}
             val resolvedPoster = posterUrl ?: loadResponse?.posterUrl
-            val epObj = currentEpisode ?: (if (currentEpIndex != -1) allEpisodes.getOrNull(currentEpIndex) else null)
+            val epObj = currentEp ?: (if (currentEpIndex != -1) allEpisodes.getOrNull(currentEpIndex) else null) ?: currentEpisode
             DesktopDataStore.saveWatchProgress(
                 WatchProgress(
-                    title = title + (episodeName?.let { " — $it" } ?: ""),
+                    title = title + (activeEpisodeName?.let { if (it.isNotBlank()) " — $it" else "" } ?: (episodeName?.let { " — $it" } ?: "")),
                     url = loadResponse?.url ?: activeSource.url,
                     posterUrl = resolvedPoster,
                     positionMillis = currentPosition,

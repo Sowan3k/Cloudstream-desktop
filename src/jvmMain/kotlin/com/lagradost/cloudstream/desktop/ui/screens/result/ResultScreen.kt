@@ -108,7 +108,17 @@ fun ResultScreen(
                         DesktopScreen.Player(
                             mediaUrl = bestLink.url,
                             title = currentResponse.name,
-                            episodeName = episode?.name ?: episode?.let { "S${it.season}E${it.episode}" },
+                            episodeName = episode?.let { ep ->
+                                val code = "S${ep.season ?: 1}E${ep.episode ?: 1}"
+                                val name = ep.name
+                                if (!name.isNullOrBlank() && !name.contains(code, ignoreCase = true)) {
+                                    "$code — $name"
+                                } else if (!name.isNullOrBlank()) {
+                                    name
+                                } else {
+                                    code
+                                }
+                            },
                             posterUrl = currentResponse.posterUrl,
                             headers = bestLink.headers,
                             subtitles = subs,
@@ -157,10 +167,23 @@ fun ResultScreen(
                 }
                 if (autoPlay && !hasAutoPlayed) {
                     hasAutoPlayed = true
-                    val epToPlay = if (res is TvSeriesLoadResponse) {
-                        val matchEpIndex = DesktopDataStore.currentSettings.watchHistory
-                            .firstOrNull { it.url == url }?.episodeIndex ?: 0
-                        res.episodes.getOrNull(matchEpIndex) ?: res.episodes.firstOrNull()
+                    val epToPlay = if (res is TvSeriesLoadResponse && res.episodes.isNotEmpty()) {
+                        val historyMatch = DesktopDataStore.currentSettings.watchHistory.firstOrNull { it.url == url }
+                        if (historyMatch != null) {
+                            val sNum = historyMatch.seasonIndex ?: Regex("""S(\d+)E(\d+)""", RegexOption.IGNORE_CASE)
+                                .find(historyMatch.title)?.groupValues?.get(1)?.toIntOrNull()
+                            val eNum = historyMatch.episodeIndex ?: Regex("""S(\d+)E(\d+)""", RegexOption.IGNORE_CASE)
+                                .find(historyMatch.title)?.groupValues?.get(2)?.toIntOrNull()
+
+                            if (sNum != null && eNum != null) {
+                                res.episodes.firstOrNull { ep -> ep.season == sNum && ep.episode == eNum }
+                            } else if (eNum != null) {
+                                res.episodes.firstOrNull { ep -> ep.episode == eNum }
+                            } else null
+                            ?: res.episodes.first()
+                        } else {
+                            res.episodes.first()
+                        }
                     } else null
                     extractAndPlay(episode = epToPlay, targetResponse = res)
                 }
@@ -320,12 +343,21 @@ fun ResultScreen(
                                                 Text("Play Movie", color = Color.Black, fontWeight = FontWeight.Bold)
                                             }
                                         } else if (res is TvSeriesLoadResponse) {
-                                            val firstEp = res.episodes.firstOrNull()
+                                            val historyMatch = DesktopDataStore.currentSettings.watchHistory.firstOrNull { it.url == url }
+                                            val epToPlay = if (historyMatch != null) {
+                                                val targetSeason = historyMatch.seasonIndex
+                                                val targetEpNum = historyMatch.episodeIndex
+                                                res.episodes.firstOrNull { ep ->
+                                                    (targetSeason == null || ep.season == targetSeason) &&
+                                                    (targetEpNum == null || ep.episode == targetEpNum)
+                                                } ?: res.episodes.firstOrNull()
+                                            } else res.episodes.firstOrNull()
+
                                             Button(
-                                                onClick = { firstEp?.let { extractAndPlay(it) } },
+                                                onClick = { epToPlay?.let { extractAndPlay(it) } },
                                                 colors = ButtonDefaults.buttonColors(containerColor = Color.White),
                                                 shape = RoundedCornerShape(10.dp),
-                                                enabled = !isExtractingLinks && firstEp != null
+                                                enabled = !isExtractingLinks && epToPlay != null
                                             ) {
                                                 if (isExtractingLinks) {
                                                     CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.Black, strokeWidth = 2.dp)
@@ -333,7 +365,12 @@ fun ResultScreen(
                                                     Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(20.dp))
                                                 }
                                                 Spacer(Modifier.width(6.dp))
-                                                Text("Play S1E1", color = Color.Black, fontWeight = FontWeight.Bold)
+                                                val epLabel = if (epToPlay != null) {
+                                                    val s = epToPlay.season ?: 1
+                                                    val e = epToPlay.episode ?: 1
+                                                    if (historyMatch != null) "Resume S${s}E${e}" else "Play S${s}E${e}"
+                                                } else "Play"
+                                                Text(epLabel, color = Color.Black, fontWeight = FontWeight.Bold)
                                             }
                                         }
 
