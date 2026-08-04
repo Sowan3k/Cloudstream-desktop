@@ -1,7 +1,10 @@
 package com.lagradost.cloudstream.desktop.ui.screens.result
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -17,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -37,6 +41,18 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+// ─── Windows 11 Color Tokens ──────────────────────────────────────────────────
+private val SurfaceBase    = Color(0xFF1C1C1C)
+private val SurfaceLayer   = Color(0xFF242424)
+private val SurfaceCard    = Color(0xFF2C2C2C)
+private val SurfaceHover   = Color(0xFF323232)
+private val BorderSubtle   = Color(0x18FFFFFF)
+private val BorderDefault  = Color(0x26FFFFFF)
+private val TextPrimary    = Color(0xFFFFFFFF)
+private val TextSecondary  = Color(0x99FFFFFF)
+private val TextTertiary   = Color(0x66FFFFFF)
+private val AccentBlue     = Color(0xFF0078D4)
 
 @Composable
 fun ResultScreen(
@@ -63,7 +79,7 @@ fun ResultScreen(
     var hasAutoPlayed by remember { mutableStateOf(false) }
     var isInWatchlist by remember { mutableStateOf(DesktopDataStore.isInWatchlist(url)) }
 
-    // Extract links and either play directly or show quality picker
+    // Extract links and play directly
     fun extractAndPlay(episode: Episode? = null, targetResponse: LoadResponse? = loadResponse) {
         val currentResponse = targetResponse ?: return
         val api = activeApi ?: DesktopPluginLoader.getApiByName(apiName) ?: return
@@ -86,7 +102,6 @@ fun ResultScreen(
                         callback = { link -> links.add(link) }
                     )
                 }
-                // Rank links: prioritize direct video files (.mkv, .mp4, .m3u8), file size metadata (GB/MB), deep paths, and quality
                 fun rankLink(link: ExtractorLink): Int {
                     var score = link.quality * 100
                     val urlLower = link.url.lowercase().trimEnd('/')
@@ -104,7 +119,6 @@ fun ResultScreen(
                 subtitleTracks = subs
 
                 if (sortedLinks.isNotEmpty()) {
-                    // Play best direct video file link immediately, passing all sources & subs to PlayerScreen
                     val bestLink = sortedLinks.first()
                     onNavigate(
                         DesktopScreen.Player(
@@ -129,7 +143,7 @@ fun ResultScreen(
                             currentEpisode = episode,
                             apiName = api.name
                         ),
-                        autoPlay // replaceCurrent if autoPlay
+                        autoPlay
                     )
                 } else {
                     errorMessage = "No playable links found."
@@ -199,72 +213,66 @@ fun ResultScreen(
         }
     }
 
-    Box(modifier = modifier.fillMaxSize().background(Color(0xFF0D0D12))) {
+    Box(modifier = modifier.fillMaxSize().background(SurfaceBase)) {
         when {
-            autoPlay && (isLoading || isExtractingLinks) -> ResumingState()
-            isLoading -> LoadingState()
-            errorMessage != null -> ErrorState(errorMessage!!, onBack)
+            autoPlay && (isLoading || isExtractingLinks) -> Win11ResumingState()
+            isLoading -> Win11LoadingState()
+            errorMessage != null -> Win11ErrorState(errorMessage!!, onBack)
             loadResponse != null -> {
                 val res = loadResponse!!
 
-                // Backdrop + content layout
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    // ── HERO BACKDROP ─────────────────────────────────────
+                    // ── HERO BACKDROP ─────────────────────────────────────────
                     item {
-                        Box(modifier = Modifier.fillMaxWidth().height(420.dp)) {
-                            // Blurred backdrop
+                        Box(modifier = Modifier.fillMaxWidth().height(380.dp)) {
+                            // Blurred backdrop image
                             SubcomposeAsyncImage(
                                 model = res.backgroundPosterUrl ?: searchResponse?.posterUrl ?: res.posterUrl,
                                 contentDescription = null,
-                                modifier = Modifier.fillMaxSize().blur(12.dp),
+                                modifier = Modifier.fillMaxSize().blur(16.dp),
                                 contentScale = ContentScale.Crop,
                                 error = {
-                                    Box(
-                                        modifier = Modifier.fillMaxSize().background(
-                                            Brush.linearGradient(listOf(Color(0xFF1A1A3E), Color(0xFF12122A)))
-                                        )
-                                    )
+                                    Box(modifier = Modifier.fillMaxSize().background(SurfaceLayer))
                                 }
                             )
 
-                            // Dark overlay
+                            // Win11 Dark Gradient overlay
                             Box(
                                 modifier = Modifier.fillMaxSize().background(
                                     Brush.verticalGradient(
                                         listOf(
-                                            Color.Black.copy(alpha = 0.55f),
+                                            Color.Black.copy(alpha = 0.5f),
                                             Color.Black.copy(alpha = 0.75f),
-                                            Color(0xFF0D0D12)
+                                            SurfaceBase
                                         )
                                     )
                                 )
                             )
 
-                            // Back button
-                            IconButton(
-                                onClick = onBack,
-                                modifier = Modifier
-                                    .padding(20.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.Black.copy(alpha = 0.5f))
-                            ) {
-                                Icon(Icons.Default.ArrowBack, null, tint = Color.White)
+                            // Top Back button
+                            Box(modifier = Modifier.padding(20.dp)) {
+                                Win11IconButton(
+                                    icon = Icons.Default.ArrowBack,
+                                    tooltip = "Back",
+                                    onClick = onBack
+                                )
                             }
 
-                            // Hero content
+                            // Hero Content Info
                             Row(
                                 modifier = Modifier
                                     .align(Alignment.BottomStart)
                                     .fillMaxWidth()
-                                    .padding(24.dp),
+                                    .padding(horizontal = 28.dp, vertical = 20.dp),
                                 horizontalArrangement = Arrangement.spacedBy(24.dp),
                                 verticalAlignment = Alignment.Bottom
                             ) {
-                                // Poster
-                                Card(
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.width(140.dp).height(210.dp),
-                                    elevation = CardDefaults.cardElevation(16.dp)
+                                // Poster Surface Card
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = SurfaceCard,
+                                    border = BorderStroke(1.dp, BorderDefault),
+                                    modifier = Modifier.width(140.dp).height(210.dp)
                                 ) {
                                     SubcomposeAsyncImage(
                                         model = res.posterUrl,
@@ -273,76 +281,92 @@ fun ResultScreen(
                                         contentScale = ContentScale.Crop,
                                         error = {
                                             Box(
-                                                modifier = Modifier.fillMaxSize().background(Color(0xFF2A2A3A)),
+                                                modifier = Modifier.fillMaxSize().background(SurfaceLayer),
                                                 contentAlignment = Alignment.Center
                                             ) {
-                                                Text(res.name.take(2).uppercase(), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
+                                                Text(
+                                                    res.name.take(2).uppercase(),
+                                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                                    color = TextTertiary
+                                                )
                                             }
                                         }
                                     )
                                 }
 
-                                // Info column
+                                // Details info column
                                 Column(modifier = Modifier.weight(1f)) {
-                                    // Tags row
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    // Info Chips (Type, Year, Rating)
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
                                         val tvType = searchResponse?.type?.name ?: res.type.name
-                                        InfoChip(tvType)
-                                        res.year?.let { InfoChip("$it") }
+                                        Win11InfoChip(tvType)
+                                        res.year?.let { Win11InfoChip("$it") }
                                         res.score?.let { s ->
-                                            InfoChip("★ ${"%.1f".format(s.toFloat(10))}", color = Color(0xFFFFD700).copy(alpha = 0.2f))
+                                            Win11InfoChip("★ ${"%.1f".format(s.toFloat(10))}", isAccent = true)
                                         }
                                     }
 
-                                    Spacer(Modifier.height(10.dp))
+                                    Spacer(Modifier.height(8.dp))
 
                                     Text(
                                         text = res.name,
-                                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
-                                        color = Color.White
+                                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = TextPrimary,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
                                     )
 
                                     // Genres
                                     if (!res.tags.isNullOrEmpty()) {
-                                        Spacer(Modifier.height(6.dp))
+                                        Spacer(Modifier.height(4.dp))
                                         Text(
-                                            text = res.tags!!.take(4).joinToString(" • "),
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontSize = 13.sp
+                                            text = res.tags!!.take(4).joinToString("  •  "),
+                                            color = AccentBlue,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium
                                         )
                                     }
 
-                                    Spacer(Modifier.height(10.dp))
+                                    Spacer(Modifier.height(8.dp))
 
-                                    // Plot (first 3 lines)
+                                    // Plot (shortened)
                                     res.plot?.let { plot ->
                                         Text(
                                             text = plot,
-                                            color = Color.LightGray,
+                                            color = TextSecondary,
                                             fontSize = 13.sp,
                                             maxLines = 3,
-                                            overflow = TextOverflow.Ellipsis
+                                            overflow = TextOverflow.Ellipsis,
+                                            lineHeight = 18.sp
                                         )
                                     }
 
                                     Spacer(Modifier.height(16.dp))
 
                                     // Action buttons
-                                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                         if (res is MovieLoadResponse) {
-                                            Button(
+                                            Surface(
                                                 onClick = { extractAndPlay(null) },
-                                                colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                                                shape = RoundedCornerShape(10.dp),
-                                                enabled = !isExtractingLinks
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = Color.White,
+                                                modifier = Modifier.height(34.dp)
                                             ) {
-                                                if (isExtractingLinks) {
-                                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.Black, strokeWidth = 2.dp)
-                                                } else {
-                                                    Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(20.dp))
+                                                Row(
+                                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                ) {
+                                                    if (isExtractingLinks) {
+                                                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.Black, strokeWidth = 2.dp)
+                                                    } else {
+                                                        Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                                                    }
+                                                    Text("Play Movie", color = Color.Black, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                                                 }
-                                                Spacer(Modifier.width(6.dp))
-                                                Text("Play Movie", color = Color.Black, fontWeight = FontWeight.Bold)
                                             }
                                         } else if (res is TvSeriesLoadResponse) {
                                             val historyMatch = DesktopDataStore.currentSettings.watchHistory.firstOrNull { it.url == url }
@@ -355,60 +379,76 @@ fun ResultScreen(
                                                 } ?: res.episodes.firstOrNull()
                                             } else res.episodes.firstOrNull()
 
-                                            Button(
+                                            Surface(
                                                 onClick = { epToPlay?.let { extractAndPlay(it) } },
-                                                colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                                                shape = RoundedCornerShape(10.dp),
-                                                enabled = !isExtractingLinks && epToPlay != null
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = Color.White,
+                                                modifier = Modifier.height(34.dp)
                                             ) {
-                                                if (isExtractingLinks) {
-                                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.Black, strokeWidth = 2.dp)
-                                                } else {
-                                                    Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(20.dp))
+                                                Row(
+                                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                ) {
+                                                    if (isExtractingLinks) {
+                                                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.Black, strokeWidth = 2.dp)
+                                                    } else {
+                                                        Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                                                    }
+                                                    val epLabel = if (epToPlay != null) {
+                                                        val s = epToPlay.season ?: 1
+                                                        val e = epToPlay.episode ?: 1
+                                                        if (historyMatch != null) "Resume S${s}E${e}" else "Play S${s}E${e}"
+                                                    } else "Play"
+                                                    Text(epLabel, color = Color.Black, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                                                 }
-                                                Spacer(Modifier.width(6.dp))
-                                                val epLabel = if (epToPlay != null) {
-                                                    val s = epToPlay.season ?: 1
-                                                    val e = epToPlay.episode ?: 1
-                                                    if (historyMatch != null) "Resume S${s}E${e}" else "Play S${s}E${e}"
-                                                } else "Play"
-                                                Text(epLabel, color = Color.Black, fontWeight = FontWeight.Bold)
                                             }
                                         }
 
-                                        OutlinedButton(
+                                        // Watchlist Button
+                                        Surface(
                                             onClick = {
-                                                val res = loadResponse
-                                                if (res != null) {
+                                                val currentRes = loadResponse
+                                                if (currentRes != null) {
                                                     if (isInWatchlist) {
                                                         DesktopDataStore.removeFromWatchlist(url)
                                                     } else {
                                                         DesktopDataStore.addToWatchlist(
                                                             WatchlistItem(
-                                                                title = res.name,
+                                                                title = currentRes.name,
                                                                 url = url,
-                                                                posterUrl = res.posterUrl,
+                                                                posterUrl = currentRes.posterUrl,
                                                                 apiName = apiName,
-                                                                tvType = res.type?.name ?: ""
+                                                                tvType = currentRes.type?.name ?: ""
                                                             )
                                                         )
                                                     }
                                                     isInWatchlist = !isInWatchlist
                                                 }
                                             },
-                                            shape = RoundedCornerShape(10.dp),
-                                            colors = if (isInWatchlist)
-                                                ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
-                                            else
-                                                ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = if (isInWatchlist) AccentBlue.copy(0.15f) else Color.White.copy(0.12f),
+                                            border = BorderStroke(1.dp, if (isInWatchlist) AccentBlue.copy(0.5f) else BorderSubtle),
+                                            modifier = Modifier.height(34.dp)
                                         ) {
-                                            Icon(
-                                                if (isInWatchlist) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                                                null,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                            Spacer(Modifier.width(6.dp))
-                                            Text(if (isInWatchlist) "Bookmarked" else "Watchlist")
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 14.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Icon(
+                                                    if (isInWatchlist) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                                    null,
+                                                    tint = if (isInWatchlist) AccentBlue else TextPrimary,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Text(
+                                                    if (isInWatchlist) "Bookmarked" else "Watchlist",
+                                                    color = if (isInWatchlist) AccentBlue else TextPrimary,
+                                                    fontSize = 13.sp,
+                                                    fontWeight = if (isInWatchlist) FontWeight.SemiBold else FontWeight.Normal
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -416,34 +456,39 @@ fun ResultScreen(
                         }
                     }
 
-                    // ── TV SERIES EPISODES ─────────────────────────────────
+                    // ── TV SERIES EPISODES ────────────────────────────────────
                     if (res is TvSeriesLoadResponse) {
                         val seasons = res.episodes.mapNotNull { it.season }.distinct().sorted()
 
                         if (seasons.size > 1) {
                             item {
-                                // Season tabs
                                 LazyRow(
-                                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    contentPadding = PaddingValues(horizontal = 28.dp, vertical = 12.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     items(seasons) { season ->
-                                        FilterChip(
-                                            selected = selectedSeason == season,
+                                        val isSelected = selectedSeason == season
+                                        val textColor by animateColorAsState(if (isSelected) TextPrimary else TextTertiary, tween(150))
+
+                                        Surface(
                                             onClick = { selectedSeason = season },
-                                            label = { Text("Season $season", fontWeight = if (selectedSeason == season) FontWeight.Bold else FontWeight.Normal) },
-                                            colors = FilterChipDefaults.filterChipColors(
-                                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                                selectedLabelColor = Color.White,
-                                                containerColor = Color(0xFF2A2A3A),
-                                                labelColor = Color.LightGray
+                                            shape = RoundedCornerShape(5.dp),
+                                            color = if (isSelected) AccentBlue.copy(0.12f) else Color.Transparent,
+                                            border = BorderStroke(1.dp, if (isSelected) AccentBlue.copy(0.5f) else BorderSubtle)
+                                        ) {
+                                            Text(
+                                                "Season $season",
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                                                color = textColor,
+                                                fontSize = 12.sp,
+                                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                                             )
-                                        )
+                                        }
                                     }
                                 }
                             }
                         } else {
-                            item { Spacer(Modifier.height(16.dp)) }
+                            item { Spacer(Modifier.height(12.dp)) }
                         }
 
                         val seasonEpisodes = if (selectedSeason != null)
@@ -453,59 +498,59 @@ fun ResultScreen(
                         item {
                             Text(
                                 text = "Episodes (${seasonEpisodes.size})",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimary,
+                                modifier = Modifier.padding(horizontal = 28.dp, vertical = 6.dp)
                             )
                         }
 
                         itemsIndexed(seasonEpisodes) { index, ep ->
-                            EpisodeRow(
+                            Win11EpisodeRow(
                                 episode = ep,
                                 index = index,
                                 isExtracting = isExtractingLinks && extractingEpisode == ep,
                                 onClick = { extractAndPlay(ep) },
-                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
+                                modifier = Modifier.padding(horizontal = 28.dp, vertical = 4.dp)
                             )
                         }
                     }
 
-                    // ── FULL PLOT ──────────────────────────────────────────
+                    // ── SYNOPSIS ─────────────────────────────────────────────
                     res.plot?.let { plot ->
                         item {
-                            Column(modifier = Modifier.padding(24.dp)) {
-                                Text("Synopsis", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = Color.White)
+                            Column(modifier = Modifier.padding(horizontal = 28.dp, vertical = 20.dp)) {
+                                Text("Synopsis", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
                                 Spacer(Modifier.height(8.dp))
-                                Text(plot, color = Color.LightGray, fontSize = 14.sp, lineHeight = 22.sp)
+                                Text(plot, color = TextSecondary, fontSize = 13.sp, lineHeight = 20.sp)
                             }
                         }
                     }
 
-                    // ── CAST / ACTORS ──────────────────────────────────────
+                    // ── CAST / ACTORS ─────────────────────────────────────────
                     val actors = res.actors
                     if (!actors.isNullOrEmpty()) {
                         item {
-                            Column(modifier = Modifier.padding(horizontal = 24.dp)) {
-                                Text("Cast", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = Color.White)
+                            Column(modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp)) {
+                                Text("Cast", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
                                 Spacer(Modifier.height(12.dp))
-                                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                                     items(actors.take(12)) { actorData ->
-                                        ActorCard(actorData)
+                                        Win11ActorCard(actorData)
                                     }
                                 }
-                                Spacer(Modifier.height(24.dp))
                             }
                         }
                     }
 
-                    // ── RECOMMENDATIONS ───────────────────────────────────
+                    // ── RECOMMENDATIONS ──────────────────────────────────────
                     val recommendations = res.recommendations
                     if (!recommendations.isNullOrEmpty()) {
                         item {
-                            Column(modifier = Modifier.padding(horizontal = 24.dp)) {
-                                Text("More Like This", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = Color.White)
+                            Column(modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp)) {
+                                Text("More Like This", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
                                 Spacer(Modifier.height(12.dp))
-                                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                     items(recommendations.take(10)) { rec ->
                                         MediaCard(
                                             item = rec,
@@ -513,11 +558,10 @@ fun ResultScreen(
                                                 onNavigate(DesktopScreen.Result(url = rec.url, apiName = rec.apiName, searchResponse = rec), false)
                                             },
                                             width = 130.dp,
-                                            height = 195.dp
+                                            height = 190.dp
                                         )
                                     }
                                 }
-                                Spacer(Modifier.height(32.dp))
                             }
                         }
                     }
@@ -527,23 +571,24 @@ fun ResultScreen(
             }
         }
 
-        // Extracting overlay
+        // Extracting Overlay
         if (isExtractingLinks) {
             Box(
-                modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)),
+                modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.65f)),
                 contentAlignment = Alignment.Center
             ) {
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E2A))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = SurfaceCard,
+                    border = BorderStroke(1.dp, BorderSubtle)
                 ) {
                     Column(
-                        modifier = Modifier.padding(32.dp),
+                        modifier = Modifier.padding(horizontal = 32.dp, vertical = 24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.height(16.dp))
-                        Text("Finding stream links…", color = Color.White)
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = AccentBlue, strokeWidth = 2.dp)
+                        Spacer(Modifier.height(14.dp))
+                        Text("Finding stream links...", color = TextPrimary, fontSize = 13.sp)
                     }
                 }
             }
@@ -551,98 +596,141 @@ fun ResultScreen(
     }
 }
 
-// ─── Episode Row ─────────────────────────────────────────────────────────────
-
+// ─── Win11 Icon Button ────────────────────────────────────────────────────────
 @Composable
-fun EpisodeRow(
+private fun Win11IconButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    tooltip: String,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val hovered by interactionSource.collectIsHoveredAsState()
+
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(6.dp),
+        color = if (hovered) SurfaceHover else Color.Black.copy(0.45f),
+        border = BorderStroke(1.dp, if (hovered) BorderDefault else BorderSubtle),
+        modifier = Modifier.size(32.dp).hoverable(interactionSource)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(icon, tooltip, tint = TextPrimary, modifier = Modifier.size(16.dp))
+        }
+    }
+}
+
+// ─── Win11 Info Chip ──────────────────────────────────────────────────────────
+@Composable
+private fun Win11InfoChip(label: String, isAccent: Boolean = false) {
+    Surface(
+        shape = RoundedCornerShape(4.dp),
+        color = if (isAccent) Color(0xFFFFD700).copy(alpha = 0.15f) else Color.White.copy(alpha = 0.08f),
+        border = BorderStroke(1.dp, if (isAccent) Color(0xFFFFD700).copy(alpha = 0.3f) else BorderSubtle)
+    ) {
+        Text(
+            label,
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+            fontSize = 11.sp,
+            color = if (isAccent) Color(0xFFFFD700) else TextSecondary,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+// ─── Episode Row Component ────────────────────────────────────────────────────
+@Composable
+private fun Win11EpisodeRow(
     episode: Episode,
     index: Int,
     isExtracting: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var hovered by remember { mutableStateOf(false) }
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (hovered) Color(0xFF2A2A3A) else Color(0xFF1A1A22)
-        ),
-        elevation = CardDefaults.cardElevation(if (hovered) 6.dp else 1.dp)
+    val interactionSource = remember { MutableInteractionSource() }
+    val hovered by interactionSource.collectIsHoveredAsState()
+
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(6.dp),
+        color = if (hovered) SurfaceHover else SurfaceCard,
+        border = BorderStroke(1.dp, if (hovered) BorderDefault else BorderSubtle),
+        modifier = modifier.fillMaxWidth().hoverable(interactionSource)
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Episode number badge
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
+            // Episode Number Badge
+            Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = AccentBlue.copy(alpha = 0.12f),
+                modifier = Modifier.size(36.dp)
             ) {
-                if (isExtracting) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
-                } else {
-                    Text(
-                        text = "${episode.episode ?: (index + 1)}",
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
-                    )
+                Box(contentAlignment = Alignment.Center) {
+                    if (isExtracting) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = AccentBlue, strokeWidth = 2.dp)
+                    } else {
+                        Text(
+                            text = "${episode.episode ?: (index + 1)}",
+                            color = AccentBlue,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp
+                        )
+                    }
                 }
             }
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = episode.name ?: "Episode ${episode.episode ?: (index + 1)}",
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 13.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 if (episode.season != null) {
                     Text(
                         text = "Season ${episode.season} • Episode ${episode.episode}",
-                        fontSize = 12.sp,
-                        color = Color.Gray
+                        fontSize = 11.sp,
+                        color = TextTertiary
                     )
                 }
                 episode.description?.let { desc ->
                     Text(
                         text = desc,
                         fontSize = 11.sp,
-                        color = Color.Gray.copy(alpha = 0.7f),
-                        maxLines = 2,
+                        color = TextTertiary,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
             }
 
-            Icon(Icons.Default.PlayCircleOutline, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+            Icon(
+                Icons.Default.PlayArrow,
+                null,
+                tint = if (hovered) AccentBlue else TextTertiary,
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }
 
-// ─── Actor Card ──────────────────────────────────────────────────────────────
-
+// ─── Actor Card Component ─────────────────────────────────────────────────────
 @Composable
-fun ActorCard(actorData: ActorData, modifier: Modifier = Modifier) {
+private fun Win11ActorCard(actorData: ActorData, modifier: Modifier = Modifier) {
     val actor = actorData.actor
     Column(
-        modifier = modifier.width(80.dp),
+        modifier = modifier.width(76.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
-            modifier = Modifier
-                .size(72.dp)
-                .clip(CircleShape)
-                .background(Color(0xFF2A2A3A)),
-            contentAlignment = Alignment.Center
+        Surface(
+            shape = CircleShape,
+            color = SurfaceLayer,
+            border = BorderStroke(1.dp, BorderSubtle),
+            modifier = Modifier.size(64.dp)
         ) {
             if (actor.image != null) {
                 SubcomposeAsyncImage(
@@ -651,181 +739,78 @@ fun ActorCard(actorData: ActorData, modifier: Modifier = Modifier) {
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                     error = {
-                        Text(
-                            actor.name.take(1),
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp
-                        )
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(actor.name.take(1), color = TextTertiary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        }
                     }
                 )
             } else {
-                Text(
-                    actor.name.take(1),
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp
-                )
+                Box(contentAlignment = Alignment.Center) {
+                    Text(actor.name.take(1), color = TextTertiary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                }
             }
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(5.dp))
         Text(
             actor.name,
             fontSize = 11.sp,
-            color = Color.White,
+            color = TextSecondary,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             fontWeight = FontWeight.Medium
         )
         actorData.roleString?.let { role ->
-            Text(role, fontSize = 10.sp, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(role, fontSize = 10.sp, color = TextTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-    }
-}
-
-// ─── Quality Picker Dialog ────────────────────────────────────────────────────
-
-@Composable
-fun QualityPickerDialog(
-    links: List<ExtractorLink>,
-    onSelect: (ExtractorLink) -> Unit,
-    onDismiss: () -> Unit
-) {
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E2A)),
-            modifier = Modifier.fillMaxWidth(0.6f)
-        ) {
-            Column(modifier = Modifier.padding(24.dp)) {
-                Text(
-                    "Select Quality",
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = Color.White
-                )
-                Text(
-                    "${links.size} stream sources found",
-                    color = Color.Gray,
-                    fontSize = 13.sp
-                )
-                Spacer(Modifier.height(16.dp))
-
-                links.forEachIndexed { index, link ->
-                    val qualityLabel = when {
-                        link.quality >= 2160 -> "4K UHD"
-                        link.quality >= 1080 -> "1080p Full HD"
-                        link.quality >= 720 -> "720p HD"
-                        link.quality >= 480 -> "480p SD"
-                        link.quality >= 360 -> "360p Low"
-                        link.quality > 0 -> "${link.quality}p"
-                        else -> "Auto"
-                    }
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                            .clickable { onSelect(link) },
-                        shape = RoundedCornerShape(10.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A3A))
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            // Quality badge
-                            Surface(
-                                color = when {
-                                    link.quality >= 1080 -> Color(0xFF1565C0)
-                                    link.quality >= 720 -> Color(0xFF2E7D32)
-                                    else -> Color(0xFF6A1B9A)
-                                },
-                                shape = RoundedCornerShape(6.dp)
-                            ) {
-                                Text(
-                                    qualityLabel,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                    color = Color.White,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(link.name, color = Color.White, fontWeight = FontWeight.Medium)
-                                Text(
-                                    link.url.take(50) + if (link.url.length > 50) "…" else "",
-                                    color = Color.Gray,
-                                    fontSize = 11.sp,
-                                    maxLines = 1
-                                )
-                            }
-                            Icon(Icons.Default.PlayArrow, null, tint = MaterialTheme.colorScheme.primary)
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(8.dp))
-                TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) {
-                    Text("Cancel", color = Color.Gray)
-                }
-            }
-        }
-    }
-}
-
-// ─── Info Chip ────────────────────────────────────────────────────────────────
-
-@Composable
-fun InfoChip(label: String, color: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)) {
-    Surface(
-        shape = RoundedCornerShape(6.dp),
-        color = color
-    ) {
-        Text(
-            label,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-            fontSize = 11.sp,
-            color = Color.White,
-            fontWeight = FontWeight.SemiBold
-        )
     }
 }
 
 // ─── States ───────────────────────────────────────────────────────────────────
-
 @Composable
-private fun LoadingState() {
+private fun Win11LoadingState() {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.height(16.dp))
-            Text("Loading media details…", color = Color.Gray)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            CircularProgressIndicator(modifier = Modifier.size(28.dp), color = AccentBlue, strokeWidth = 2.dp)
+            Text("Loading media details...", color = TextTertiary, fontSize = 13.sp)
         }
     }
 }
 
 @Composable
-private fun ResumingState() {
-    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0D0D12)), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, strokeWidth = 3.dp, modifier = Modifier.size(44.dp))
-            Spacer(Modifier.height(18.dp))
-            Text("Resuming playback…", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-            Spacer(Modifier.height(6.dp))
-            Text("Fetching stream sources", color = Color.White.copy(0.5f), fontSize = 12.sp)
+private fun Win11ResumingState() {
+    Box(modifier = Modifier.fillMaxSize().background(SurfaceBase), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            CircularProgressIndicator(modifier = Modifier.size(32.dp), color = AccentBlue, strokeWidth = 2.dp)
+            Text("Resuming playback...", color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            Text("Fetching stream links", color = TextTertiary, fontSize = 12.sp)
         }
     }
 }
 
 @Composable
-private fun ErrorState(message: String, onBack: () -> Unit) {
+private fun Win11ErrorState(message: String, onBack: () -> Unit) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
-            Icon(Icons.Default.ErrorOutline, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(48.dp))
-            Spacer(Modifier.height(16.dp))
-            Text(message, color = MaterialTheme.colorScheme.error, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-            Spacer(Modifier.height(16.dp))
-            Button(onClick = onBack) { Text("Go Back") }
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(32.dp)
+        ) {
+            Icon(Icons.Default.ErrorOutline, null, tint = Color(0xFFCF6679), modifier = Modifier.size(40.dp))
+            Text(message, color = TextSecondary, fontSize = 13.sp)
+            Surface(
+                onClick = onBack,
+                shape = RoundedCornerShape(6.dp),
+                color = SurfaceLayer,
+                border = BorderStroke(1.dp, BorderSubtle)
+            ) {
+                Text("Go Back", modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), color = TextPrimary, fontSize = 12.sp)
+            }
         }
     }
 }

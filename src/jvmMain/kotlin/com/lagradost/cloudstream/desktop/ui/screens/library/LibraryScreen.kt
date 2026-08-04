@@ -417,6 +417,30 @@ private fun HistoryCard(
                     PosterPlaceholder(progress.title)
                 }
 
+                // Top-Left Episode Cover Tag (pags top side)
+                if (progress.seasonIndex != null || progress.episodeIndex != null) {
+                    val badge = buildString {
+                        if (progress.seasonIndex != null) append("S${progress.seasonIndex}")
+                        if (progress.episodeIndex != null) append("E${progress.episodeIndex}")
+                    }
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xFF0078D4))
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            badge,
+                            color = Color.White,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+
                 // Bottom gradient + info
                 Box(
                     modifier = Modifier
@@ -429,22 +453,12 @@ private fun HistoryCard(
                                 1f to Color.Black.copy(0.95f)
                             )
                         )
-                        .padding(horizontal = 10.dp, vertical = 10.dp)
+                        .padding(horizontal = 8.dp, vertical = 8.dp)
                 ) {
-                    Column {
-                        // Episode badge
-                        if (progress.seasonIndex != null || progress.episodeIndex != null) {
-                            val badge = buildString {
-                                if (progress.seasonIndex != null) append("S${progress.seasonIndex}")
-                                if (progress.episodeIndex != null) append("E${progress.episodeIndex}")
-                            }
-                            Text(
-                                badge,
-                                color = Color.White.copy(0.7f),
-                                fontSize = 10.sp,
-                                modifier = Modifier.padding(bottom = 3.dp)
-                            )
-                        }
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Text(
                             progress.title.substringBefore(" — ").trim(),
                             color = Color.White,
@@ -452,10 +466,12 @@ private fun HistoryCard(
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                             fontSize = 12.sp,
-                            lineHeight = 15.sp
+                            lineHeight = 15.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
                         )
                         if (showProgress && progress.durationMillis > 0) {
-                            Spacer(Modifier.height(6.dp))
+                            Spacer(Modifier.height(5.dp))
                             LinearProgressIndicator(
                                 progress = { pct },
                                 modifier = Modifier.fillMaxWidth().height(2.dp).clip(RoundedCornerShape(1.dp)),
@@ -465,15 +481,17 @@ private fun HistoryCard(
                             Spacer(Modifier.height(3.dp))
                             Text(
                                 "${(pct * 100).toInt()}%  •  ${formatTime(progress.positionMillis)}",
-                                color = Color.White.copy(0.55f),
-                                fontSize = 10.sp
+                                color = Color.White.copy(0.7f),
+                                fontSize = 10.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
                         } else if (!showProgress) {
                             Spacer(Modifier.height(3.dp))
                             Text(
                                 formatRelativeTime(progress.lastWatchedTimestamp),
-                                color = Color.White.copy(0.45f),
-                                fontSize = 10.sp
+                                color = Color.White.copy(0.6f),
+                                fontSize = 10.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
                         }
                     }
@@ -588,9 +606,12 @@ private fun WatchlistCard(
                                 1f to Color.Black.copy(0.95f)
                             )
                         )
-                        .padding(10.dp)
+                        .padding(horizontal = 8.dp, vertical = 8.dp)
                 ) {
-                    Column {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Text(
                             item.title,
                             color = Color.White,
@@ -598,13 +619,16 @@ private fun WatchlistCard(
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                             fontSize = 12.sp,
-                            lineHeight = 15.sp
+                            lineHeight = 15.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(Modifier.height(3.dp))
                         Text(
                             formatRelativeTime(item.addedTimestamp),
-                            color = Color.White.copy(0.45f),
-                            fontSize = 10.sp
+                            color = Color.White.copy(0.6f),
+                            fontSize = 10.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                     }
                 }

@@ -110,6 +110,10 @@ object DesktopDataStore {
         }
     }
 
+    fun clearWatchlist() {
+        updateSettings { settings -> settings.copy(watchlist = emptyList()) }
+    }
+
     fun isInWatchlist(url: String): Boolean =
         currentSettings.watchlist.any { it.url == url }
 

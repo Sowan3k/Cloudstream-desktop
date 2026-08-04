@@ -1,8 +1,14 @@
 package com.lagradost.cloudstream.desktop
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.window.WindowDraggableArea
 import androidx.compose.material.icons.Icons
@@ -16,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
@@ -175,55 +182,107 @@ private fun WindowScope.CustomTitleBar(
     windowState: WindowState,
     onClose: () -> Unit
 ) {
-    Row(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .height(34.dp)
-            .background(Color(0xFF0D0D12))
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .height(36.dp),
+        color = Color(0xFF1C1C1C),
+        border = BorderStroke(1.dp, Color(0x18FFFFFF))
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Image(
-                painter = painterResource("icon.png"),
-                contentDescription = null,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(title, color = Color.LightGray, fontSize = 12.sp)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            // Minimize
-            IconButton(
-                onClick = { windowState.isMinimized = true },
-                modifier = Modifier.size(30.dp)
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Left: Logo + App Title
+            Row(
+                modifier = Modifier.padding(start = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Minimize, "Minimize", tint = Color.LightGray, modifier = Modifier.size(14.dp))
-            }
-            // Maximize / Restore
-            IconButton(
-                onClick = {
-                    windowState.placement = if (windowState.placement == WindowPlacement.Maximized) {
-                        WindowPlacement.Floating
-                    } else {
-                        WindowPlacement.Maximized
-                    }
-                },
-                modifier = Modifier.size(30.dp)
-            ) {
-                Icon(
-                    if (windowState.placement == WindowPlacement.Maximized) Icons.Default.CropSquare else Icons.Default.CheckBoxOutlineBlank,
-                    "Maximize", tint = Color.LightGray, modifier = Modifier.size(14.dp)
+                Image(
+                    painter = painterResource("icon.png"),
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    title,
+                    color = Color(0x99FFFFFF),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
                 )
             }
-            // Close
-            IconButton(
-                onClick = onClose,
-                modifier = Modifier.size(30.dp)
+
+            // Right: Windows Caption Control Buttons
+            Row(
+                modifier = Modifier.fillMaxHeight(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Close, "Close", tint = Color(0xFFFF5555), modifier = Modifier.size(14.dp))
+                // Minimize
+                Win11CaptionButton(
+                    icon = Icons.Default.Minimize,
+                    onClick = { windowState.isMinimized = true }
+                )
+                // Maximize / Restore
+                Win11CaptionButton(
+                    icon = if (windowState.placement == WindowPlacement.Maximized) Icons.Default.CropSquare else Icons.Default.CheckBoxOutlineBlank,
+                    onClick = {
+                        windowState.placement = if (windowState.placement == WindowPlacement.Maximized) {
+                            WindowPlacement.Floating
+                        } else {
+                            WindowPlacement.Maximized
+                        }
+                    }
+                )
+                // Close
+                Win11CaptionButton(
+                    icon = Icons.Default.Close,
+                    isClose = true,
+                    onClick = onClose
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun Win11CaptionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    isClose: Boolean = false,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val hovered by interactionSource.collectIsHoveredAsState()
+
+    val bgColor by animateColorAsState(
+        if (hovered) {
+            if (isClose) Color(0xFFE81123) else Color(0x1AFFFFFF)
+        } else Color.Transparent,
+        animationSpec = tween(120)
+    )
+    val iconColor by animateColorAsState(
+        if (hovered) Color.White else Color(0x99FFFFFF),
+        animationSpec = tween(120)
+    )
+
+    Box(
+        modifier = Modifier
+            .width(46.dp)
+            .fillMaxHeight()
+            .background(bgColor)
+            .hoverable(interactionSource)
+            .clickable(
+                indication = null,
+                interactionSource = interactionSource,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = iconColor,
+            modifier = Modifier.size(12.dp)
+        )
     }
 }

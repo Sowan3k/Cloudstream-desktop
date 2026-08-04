@@ -3,6 +3,8 @@ package com.lagradost.cloudstream.desktop.ui.components
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -13,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -36,12 +39,17 @@ import java.util.Locale
 fun MediaCard(
     item: SearchResponse,
     onClick: () -> Unit,
-    width: Dp = 150.dp,
-    height: Dp = 225.dp,
+    width: Dp = 140.dp,
+    height: Dp = 205.dp,
     showType: Boolean = true,
     modifier: Modifier = Modifier
 ) {
-    var hovered by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val hovered by interactionSource.collectIsHoveredAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (hovered) 1.02f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+    )
 
     val displayTitle = remember(item.name, item.url) {
         var title = item.name.trim()
@@ -57,7 +65,6 @@ fun MediaCard(
             }
         }
 
-        // Clean technical resolution and audio tags from poster title
         title = title
             .replace(Regex("""(?i)\[?(Dual\s*Audio|Hindi|English|Bengali|Multi|Sub|Dubbed|Dub)\]?"""), "")
             .replace(Regex("""(?i)\b(4K|2160p|1080p|720p|480p|360p|WEBRip|WebRip|HDTS|BluRay|WEB-DL|AMZN|NF|DSNP|HDTV|x264|x265|AAC|HEVC)\b"""), "")
@@ -70,17 +77,18 @@ fun MediaCard(
     Column(
         modifier = modifier
             .width(width)
-            .clickable { onClick() }
+            .scale(scale)
+            .hoverable(interactionSource)
+            .clickable { onClick() },
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Card(
+        Surface(
             modifier = Modifier
                 .width(width)
                 .height(height),
-            shape = RoundedCornerShape(12.dp),
-            elevation = CardDefaults.cardElevation(
-                defaultElevation = if (hovered) 12.dp else 3.dp
-            ),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E2A))
+            shape = RoundedCornerShape(8.dp),
+            color = Color(0xFF2C2C2C),
+            border = BorderStroke(1.dp, if (hovered) Color(0x26FFFFFF) else Color(0x18FFFFFF))
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 // Poster image
@@ -91,30 +99,26 @@ fun MediaCard(
                     contentScale = ContentScale.Crop,
                     loading = {
                         Box(
-                            modifier = Modifier.fillMaxSize().background(Color(0xFF2A2A3A)),
+                            modifier = Modifier.fillMaxSize().background(Color(0xFF242424)),
                             contentAlignment = Alignment.Center
                         ) {
                             CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp),
+                                color = Color(0xFF0078D4),
                                 strokeWidth = 2.dp
                             )
                         }
                     },
                     error = {
                         Box(
-                            modifier = Modifier.fillMaxSize().background(
-                                Brush.verticalGradient(listOf(Color(0xFF2A2A3A), Color(0xFF1A1A2A)))
-                            ),
+                            modifier = Modifier.fillMaxSize().background(Color(0xFF242424)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = item.name.take(2).uppercase(),
-                                    style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-                                )
-                            }
+                            Text(
+                                text = item.name.take(2).uppercase(),
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                color = Color(0x66FFFFFF)
+                            )
                         }
                     }
                 )
@@ -125,7 +129,7 @@ fun MediaCard(
                     modifier = Modifier.align(Alignment.TopStart)
                 )
 
-                // Top-Right Audio/Dub/Sub/Episode Badges (Dub, Sub)
+                // Top-Right Audio/Dub/Sub/Episode Badges
                 TopRightAudioBadge(
                     item = item,
                     modifier = Modifier.align(Alignment.TopEnd)
@@ -136,27 +140,35 @@ fun MediaCard(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.35f)),
+                            .background(Color.Black.copy(alpha = 0.25f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            Icons.Default.PlayCircle,
-                            contentDescription = "Play",
-                            tint = Color.White,
-                            modifier = Modifier.size(44.dp)
-                        )
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = Color.Black.copy(0.55f),
+                            border = BorderStroke(1.dp, Color.White.copy(0.3f)),
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.PlayArrow,
+                                    contentDescription = "Play",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
 
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
 
-        // Title text positioned below poster image outside the Card (matching screenshot)
         Text(
             text = displayTitle,
             style = MaterialTheme.typography.bodySmall.copy(
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Medium,
                 lineHeight = 15.sp
             ),
             color = Color.White,
@@ -529,19 +541,26 @@ fun TopLeftQualityBadge(item: SearchResponse, modifier: Modifier = Modifier) {
     }
 
     if (qualityText != null) {
+        val (bg, textColor) = when (qualityText.uppercase()) {
+            "4K" -> Pair(Color(0xFFD97706), Color.White)
+            "1080P" -> Pair(Color(0xFF0078D4), Color.White)
+            "720P" -> Pair(Color(0xFF107C41), Color.White)
+            else -> Pair(Color.Black.copy(alpha = 0.75f), Color.White)
+        }
         Box(
             modifier = modifier
-                .padding(4.dp)
-                .clip(RoundedCornerShape(3.dp))
-                .background(Color.Black.copy(alpha = 0.72f))
-                .border(0.5.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(3.dp))
-                .padding(horizontal = 4.dp, vertical = 1.dp)
+                .padding(6.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(bg)
+                .border(0.5.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(4.dp))
+                .padding(horizontal = 5.dp, vertical = 2.dp)
         ) {
             Text(
                 text = qualityText,
                 fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = textColor,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
         }
     }
@@ -550,9 +569,9 @@ fun TopLeftQualityBadge(item: SearchResponse, modifier: Modifier = Modifier) {
 @Composable
 fun TopRightAudioBadge(item: SearchResponse, modifier: Modifier = Modifier) {
     Column(
-        modifier = modifier.padding(4.dp),
+        modifier = modifier.padding(6.dp),
         horizontalAlignment = Alignment.End,
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+        verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         when (item) {
             is com.lagradost.cloudstream3.AnimeSearchResponse -> {
@@ -562,36 +581,38 @@ fun TopRightAudioBadge(item: SearchResponse, modifier: Modifier = Modifier) {
                 val hasSub = item.dubStatus?.contains(com.lagradost.cloudstream3.DubStatus.Subbed) == true || (subEp != null && subEp > 0)
 
                 if (hasDub) {
-                    val label = if (dubEp != null && dubEp > 0) "Dub Ep $dubEp" else "Dub"
+                    val label = if (dubEp != null && dubEp > 0) "DUB $dubEp" else "DUB"
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(3.dp))
+                            .clip(RoundedCornerShape(4.dp))
                             .background(Color.White)
-                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
                     ) {
                         Text(
                             text = label,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = Color.Black
+                            color = Color.Black,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                     }
                 }
 
                 if (hasSub) {
-                    val label = if (subEp != null && subEp > 0) "Sub Ep $subEp" else "Sub"
+                    val label = if (subEp != null && subEp > 0) "SUB $subEp" else "SUB"
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(Color(0xDD1B2230))
-                            .border(0.5.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(3.dp))
-                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color.Black.copy(0.75f))
+                            .border(0.5.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
                     ) {
                         Text(
                             text = label,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = Color.White,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                     }
                 }
@@ -603,31 +624,33 @@ fun TopRightAudioBadge(item: SearchResponse, modifier: Modifier = Modifier) {
                 if (isDub) {
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(3.dp))
+                            .clip(RoundedCornerShape(4.dp))
                             .background(Color.White)
-                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            text = "Dub",
+                            text = "DUB",
                             fontSize = 9.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = Color.Black
+                            color = Color.Black,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                     }
                 }
                 if (ep != null && ep > 0) {
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(Color(0xDD1B2230))
-                            .border(0.5.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(3.dp))
-                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color.Black.copy(0.75f))
+                            .border(0.5.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            text = "Ep $ep",
+                            text = "EP $ep",
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = Color.White,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                     }
                 }
@@ -642,15 +665,16 @@ fun TopRightAudioBadge(item: SearchResponse, modifier: Modifier = Modifier) {
                 if (isDub) {
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(3.dp))
+                            .clip(RoundedCornerShape(4.dp))
                             .background(Color.White)
-                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            text = "Dub",
+                            text = "DUB",
                             fontSize = 9.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = Color.Black
+                            color = Color.Black,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                     }
                 }
