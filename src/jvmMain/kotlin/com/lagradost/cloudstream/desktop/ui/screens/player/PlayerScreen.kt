@@ -188,7 +188,25 @@ fun PlayerScreen(
     var isMuted by remember { mutableStateOf(false) }
     var volume by remember { mutableStateOf(100) }          // 0..200
     var playbackSpeed by remember { mutableStateOf(1.0f) }
-    var currentPosition by remember { mutableStateOf(0L) }
+    val initialPosition = remember {
+        val targetUrl = loadResponse?.url ?: mediaUrl
+        val cleanTitle = title.trim().lowercase()
+        val historyMatch = DesktopDataStore.currentSettings.watchHistory.firstOrNull { h ->
+            val hUrl = h.url.trim().lowercase()
+            val hTitle = h.title.trim().lowercase()
+            val tUrl = targetUrl.trim().lowercase()
+            val mUrl = mediaUrl.trim().lowercase()
+            val sUrl = activeSource.url.trim().lowercase()
+            hUrl == tUrl || hUrl == mUrl || hUrl == sUrl ||
+            hTitle.contains(cleanTitle) || cleanTitle.contains(hTitle)
+        }
+        if (historyMatch != null && historyMatch.positionMillis > 3000L) {
+            if (historyMatch.durationMillis <= 0 || (historyMatch.durationMillis - historyMatch.positionMillis) > 10000L) {
+                historyMatch.positionMillis
+            } else 0L
+        } else 0L
+    }
+    var currentPosition by remember { mutableStateOf(initialPosition) }
     var totalDuration by remember { mutableStateOf(1L) }
     var videoFrame by remember { mutableStateOf<ImageBitmap?>(null) }
     var isVideoReady by remember { mutableStateOf(false) }
@@ -475,6 +493,21 @@ fun PlayerScreen(
                 val pos = player?.status()?.time() ?: 0L
                 if (dur > 0) { totalDuration = dur; currentPosition = pos }
 
+                // Periodic Watch Progress save (every ~5 seconds)
+                if (pos > 3000L && dur > 10_000L && (pos % 5000L < 600L)) {
+                    val resolvedPoster = posterUrl ?: loadResponse?.posterUrl
+                    DesktopDataStore.saveWatchProgress(
+                        WatchProgress(
+                            title = title + (activeEpisodeName?.let { if (it.isNotBlank()) " — $it" else "" } ?: ""),
+                            url = loadResponse?.url ?: activeSource.url,
+                            posterUrl = resolvedPoster,
+                            positionMillis = pos,
+                            durationMillis = dur,
+                            apiName = loadResponse?.apiName ?: apiName
+                        )
+                    )
+                }
+
                 // Auto-Play Next Episode when current episode is finished
                 if (dur > 30_000L && pos > 0 && (dur - pos) < 2500L && hasNextEpisode && !isExtractingNextEp) {
                     if (currentEpIndex != -1 && currentEpIndex < allEpisodes.size - 1) {
@@ -541,7 +574,8 @@ fun PlayerScreen(
                     url = loadResponse?.url ?: activeSource.url,
                     posterUrl = resolvedPoster,
                     positionMillis = currentPosition,
-                    durationMillis = totalDuration
+                    durationMillis = totalDuration,
+                    apiName = loadResponse?.apiName ?: apiName
                 )
             )
         }

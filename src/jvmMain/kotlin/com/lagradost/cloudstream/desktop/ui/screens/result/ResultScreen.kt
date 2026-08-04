@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import coil3.compose.SubcomposeAsyncImage
 import com.lagradost.cloudstream.desktop.plugins.DesktopPluginLoader
+import com.lagradost.cloudstream.desktop.storage.DesktopDataStore
 import com.lagradost.cloudstream.desktop.ui.components.MediaCard
 import com.lagradost.cloudstream.desktop.ui.navigation.DesktopScreen
 import com.lagradost.cloudstream.desktop.ui.navigation.SubtitleTrackInfo
@@ -41,12 +42,14 @@ fun ResultScreen(
     url: String,
     apiName: String,
     searchResponse: SearchResponse? = null,
-    onNavigate: (DesktopScreen) -> Unit,
+    autoPlay: Boolean = false,
+    onNavigate: (DesktopScreen, Boolean) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val coroutineScope = rememberCoroutineScope()
 
+    var activeApi by remember { mutableStateOf<MainAPI?>(null) }
     var loadResponse by remember { mutableStateOf<LoadResponse?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -56,34 +59,12 @@ fun ResultScreen(
     var showQualityPicker by remember { mutableStateOf(false) }
     var selectedSeason by remember { mutableStateOf<Int?>(null) }
     var extractingEpisode by remember { mutableStateOf<Episode?>(null) }
-
-    // Load media details
-    LaunchedEffect(url, apiName) {
-        isLoading = true
-        errorMessage = null
-        try {
-            val api = DesktopPluginLoader.getApiByName(apiName)
-            if (api != null) {
-                val res = withContext(Dispatchers.IO) { api.load(url) }
-                loadResponse = res
-                // Default to first season
-                if (res is TvSeriesLoadResponse) {
-                    selectedSeason = res.episodes.mapNotNull { it.season }.minOrNull()
-                }
-            } else {
-                errorMessage = "Provider \"$apiName\" not found."
-            }
-        } catch (e: Exception) {
-            errorMessage = "Failed to load details: ${e.localizedMessage}"
-        } finally {
-            isLoading = false
-        }
-    }
+    var hasAutoPlayed by remember { mutableStateOf(false) }
 
     // Extract links and either play directly or show quality picker
-    fun extractAndPlay(episode: Episode? = null) {
-        val currentResponse = loadResponse ?: return
-        val api = DesktopPluginLoader.getApiByName(apiName) ?: return
+    fun extractAndPlay(episode: Episode? = null, targetResponse: LoadResponse? = loadResponse) {
+        val currentResponse = targetResponse ?: return
+        val api = activeApi ?: DesktopPluginLoader.getApiByName(apiName) ?: return
         extractingEpisode = episode
         coroutineScope.launch {
             isExtractingLinks = true
@@ -123,18 +104,21 @@ fun ResultScreen(
                 if (sortedLinks.isNotEmpty()) {
                     // Play best direct video file link immediately, passing all sources & subs to PlayerScreen
                     val bestLink = sortedLinks.first()
-                    onNavigate(DesktopScreen.Player(
-                        mediaUrl = bestLink.url,
-                        title = currentResponse.name,
-                        episodeName = episode?.name ?: episode?.let { "S${it.season}E${it.episode}" },
-                        posterUrl = currentResponse.posterUrl,
-                        headers = bestLink.headers,
-                        subtitles = subs,
-                        sources = sortedLinks.map { com.lagradost.cloudstream.desktop.ui.navigation.StreamSourceInfo(name = it.name, url = it.url, quality = it.quality, headers = it.headers) },
-                        loadResponse = currentResponse,
-                        currentEpisode = episode,
-                        apiName = apiName
-                    ))
+                    onNavigate(
+                        DesktopScreen.Player(
+                            mediaUrl = bestLink.url,
+                            title = currentResponse.name,
+                            episodeName = episode?.name ?: episode?.let { "S${it.season}E${it.episode}" },
+                            posterUrl = currentResponse.posterUrl,
+                            headers = bestLink.headers,
+                            subtitles = subs,
+                            sources = sortedLinks.map { com.lagradost.cloudstream.desktop.ui.navigation.StreamSourceInfo(name = it.name, url = it.url, quality = it.quality, headers = it.headers) },
+                            loadResponse = currentResponse,
+                            currentEpisode = episode,
+                            apiName = api.name
+                        ),
+                        autoPlay // replaceCurrent if autoPlay
+                    )
                 } else {
                     errorMessage = "No playable links found."
                 }
@@ -146,8 +130,53 @@ fun ResultScreen(
         }
     }
 
+    // Load media details
+    LaunchedEffect(url, apiName) {
+        isLoading = true
+        errorMessage = null
+        try {
+            val resolvedApi = DesktopPluginLoader.getApiByName(apiName)
+                ?: (if (searchResponse != null) DesktopPluginLoader.getApiByName(searchResponse.apiName) else null)
+                ?: DesktopPluginLoader.registeredApis.value.firstOrNull { loaded ->
+                    try {
+                        val loadedHost = java.net.URI(loaded.mainUrl).host
+                        val targetHost = java.net.URI(url).host
+                        loadedHost != null && targetHost != null && loadedHost.equals(targetHost, ignoreCase = true)
+                    } catch (_: Exception) {
+                        url.startsWith(loaded.mainUrl)
+                    }
+                }
+                ?: DesktopPluginLoader.registeredApis.value.firstOrNull()
+
+            activeApi = resolvedApi
+            if (resolvedApi != null) {
+                val res = withContext(Dispatchers.IO) { resolvedApi.load(url) }
+                loadResponse = res
+                if (res is TvSeriesLoadResponse) {
+                    selectedSeason = res.episodes.mapNotNull { it.season }.minOrNull()
+                }
+                if (autoPlay && !hasAutoPlayed) {
+                    hasAutoPlayed = true
+                    val epToPlay = if (res is TvSeriesLoadResponse) {
+                        val matchEpIndex = DesktopDataStore.currentSettings.watchHistory
+                            .firstOrNull { it.url == url }?.episodeIndex ?: 0
+                        res.episodes.getOrNull(matchEpIndex) ?: res.episodes.firstOrNull()
+                    } else null
+                    extractAndPlay(episode = epToPlay, targetResponse = res)
+                }
+            } else {
+                errorMessage = "No provider plugin available to load this title."
+            }
+        } catch (e: Exception) {
+            errorMessage = "Failed to load details: ${e.localizedMessage}"
+        } finally {
+            isLoading = false
+        }
+    }
+
     Box(modifier = modifier.fillMaxSize().background(Color(0xFF0D0D12))) {
         when {
+            autoPlay && (isLoading || isExtractingLinks) -> ResumingState()
             isLoading -> LoadingState()
             errorMessage != null -> ErrorState(errorMessage!!, onBack)
             loadResponse != null -> {
@@ -417,7 +446,7 @@ fun ResultScreen(
                                         MediaCard(
                                             item = rec,
                                             onClick = {
-                                                onNavigate(DesktopScreen.Result(url = rec.url, apiName = rec.apiName, searchResponse = rec))
+                                                onNavigate(DesktopScreen.Result(url = rec.url, apiName = rec.apiName, searchResponse = rec), false)
                                             },
                                             width = 130.dp,
                                             height = 195.dp
@@ -707,6 +736,19 @@ private fun LoadingState() {
             CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(16.dp))
             Text("Loading media details…", color = Color.Gray)
+        }
+    }
+}
+
+@Composable
+private fun ResumingState() {
+    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0D0D12)), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, strokeWidth = 3.dp, modifier = Modifier.size(44.dp))
+            Spacer(Modifier.height(18.dp))
+            Text("Resuming playback…", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            Spacer(Modifier.height(6.dp))
+            Text("Fetching stream sources", color = Color.White.copy(0.5f), fontSize = 12.sp)
         }
     }
 }

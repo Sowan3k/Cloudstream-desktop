@@ -137,7 +137,7 @@ private fun ContinueWatchingGrid(
                 WatchProgressCard(
                     progress = progress,
                     onClick = {
-                        onNavigate(DesktopScreen.Result(url = progress.url, apiName = ""))
+                        onNavigate(DesktopScreen.Result(url = progress.url, apiName = progress.apiName, autoPlay = true))
                     }
                 )
             }
@@ -160,7 +160,7 @@ private fun HistoryGrid(
             WatchProgressCard(
                 progress = progress,
                 onClick = {
-                    onNavigate(DesktopScreen.Result(url = progress.url, apiName = ""))
+                    onNavigate(DesktopScreen.Result(url = progress.url, apiName = progress.apiName, autoPlay = true))
                 }
             )
         }

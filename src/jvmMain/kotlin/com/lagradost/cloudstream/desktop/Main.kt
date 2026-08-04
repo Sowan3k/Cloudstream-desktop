@@ -76,9 +76,13 @@ fun main() {
                 var currentScreen by remember { mutableStateOf<DesktopScreen>(DesktopScreen.Home) }
                 val screenHistory = remember { mutableStateListOf<DesktopScreen>() }
 
-                fun navigateTo(screen: DesktopScreen) {
-                    screenHistory.add(currentScreen)
-                    currentScreen = screen
+                fun navigateTo(screen: DesktopScreen, replaceCurrent: Boolean = false) {
+                    if (replaceCurrent) {
+                        currentScreen = screen
+                    } else {
+                        screenHistory.add(currentScreen)
+                        currentScreen = screen
+                    }
                 }
 
                 fun navigateBack() {
@@ -127,7 +131,8 @@ fun main() {
                                         url = screen.url,
                                         apiName = screen.apiName,
                                         searchResponse = screen.searchResponse,
-                                        onNavigate = { navigateTo(it) },
+                                        autoPlay = screen.autoPlay,
+                                        onNavigate = { target, replace -> navigateTo(target, replace) },
                                         onBack = { navigateBack() }
                                     )
 

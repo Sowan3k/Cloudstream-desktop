@@ -14,6 +14,7 @@ data class WatchProgress(
     val durationMillis: Long = 0,
     val episodeIndex: Int? = null,
     val seasonIndex: Int? = null,
+    val apiName: String = "",
     val lastWatchedTimestamp: Long = System.currentTimeMillis()
 )
 

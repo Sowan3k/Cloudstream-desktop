@@ -358,7 +358,8 @@ fun HomeScreen(
                                             onClick = {
                                                 onNavigate(DesktopScreen.Result(
                                                     url = progress.url,
-                                                    apiName = selectedApi?.name ?: ""
+                                                    apiName = progress.apiName,
+                                                    autoPlay = true
                                                 ))
                                             }
                                         )

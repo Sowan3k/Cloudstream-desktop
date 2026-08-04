@@ -8,7 +8,12 @@ import com.lagradost.cloudstream3.Episode
 sealed class DesktopScreen {
     data object Home : DesktopScreen()
     data class Search(val query: String = "") : DesktopScreen()
-    data class Result(val url: String, val apiName: String, val searchResponse: SearchResponse? = null) : DesktopScreen()
+    data class Result(
+        val url: String,
+        val apiName: String,
+        val searchResponse: SearchResponse? = null,
+        val autoPlay: Boolean = false
+    ) : DesktopScreen()
     data class Player(
         val mediaUrl: String,
         val title: String,
