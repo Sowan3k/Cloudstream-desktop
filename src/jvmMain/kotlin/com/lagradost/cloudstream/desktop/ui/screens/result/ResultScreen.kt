@@ -131,7 +131,9 @@ fun ResultScreen(
                         headers = bestLink.headers,
                         subtitles = subs,
                         sources = sortedLinks.map { com.lagradost.cloudstream.desktop.ui.navigation.StreamSourceInfo(name = it.name, url = it.url, quality = it.quality, headers = it.headers) },
-                        loadResponse = currentResponse
+                        loadResponse = currentResponse,
+                        currentEpisode = episode,
+                        apiName = apiName
                     ))
                 } else {
                     errorMessage = "No playable links found."

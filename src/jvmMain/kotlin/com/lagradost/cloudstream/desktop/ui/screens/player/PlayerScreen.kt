@@ -5,6 +5,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -25,16 +27,25 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.lagradost.cloudstream.desktop.plugins.DesktopPluginLoader
 import com.lagradost.cloudstream.desktop.storage.DesktopDataStore
 import com.lagradost.cloudstream.desktop.storage.WatchProgress
 import com.lagradost.cloudstream.desktop.ui.navigation.StreamSourceInfo
 import com.lagradost.cloudstream.desktop.ui.navigation.SubtitleTrackInfo
+import com.lagradost.cloudstream3.AnimeLoadResponse
+import com.lagradost.cloudstream3.Episode
 import com.lagradost.cloudstream3.LoadResponse
+import com.lagradost.cloudstream3.TvSeriesLoadResponse
+import com.lagradost.cloudstream3.utils.ExtractorLink
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import uk.co.caprica.vlcj.factory.MediaPlayerFactory
 import uk.co.caprica.vlcj.factory.discovery.NativeDiscovery
 import uk.co.caprica.vlcj.player.base.MediaPlayer
@@ -122,18 +133,47 @@ fun PlayerScreen(
     subtitles: List<SubtitleTrackInfo> = emptyList(),
     sources: List<StreamSourceInfo> = emptyList(),
     loadResponse: LoadResponse? = null,
+    currentEpisode: Episode? = null,
+    apiName: String = "",
     isFullscreen: Boolean = false,
     onToggleFullscreen: () -> Unit = {},
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val clipboardManager = LocalClipboardManager.current
+    val coroutineScope = rememberCoroutineScope()
     var isCopied by remember { mutableStateOf(false) }
+
+    // ── TV Series Episodes State ──────────────────────────────────────────────
+    val allEpisodes: List<Episode> = remember(loadResponse) {
+        when (loadResponse) {
+            is TvSeriesLoadResponse -> loadResponse.episodes
+            is AnimeLoadResponse -> loadResponse.episodes.values.flatten()
+            else -> emptyList()
+        }
+    }
+    var currentEp by remember { mutableStateOf(currentEpisode) }
+    var activeEpisodeName by remember {
+        mutableStateOf(episodeName ?: currentEpisode?.let { "S${it.season}E${it.episode}" })
+    }
+    var activeSourcesList by remember { mutableStateOf(sources) }
+    var activeSubtitlesList by remember { mutableStateOf(subtitles) }
+    var isExtractingNextEp by remember { mutableStateOf(false) }
+    var showEpisodesPicker by remember { mutableStateOf(false) }
+
+    val currentEpIndex = remember(currentEp, activeEpisodeName, allEpisodes) {
+        allEpisodes.indexOfFirst { ep ->
+            (currentEp != null && ep.data == currentEp?.data) ||
+            (activeEpisodeName != null && (ep.name == activeEpisodeName || "S${ep.season}E${ep.episode}" == activeEpisodeName))
+        }
+    }
+    val hasPrevEpisode = allEpisodes.isNotEmpty() && currentEpIndex > 0
+    val hasNextEpisode = allEpisodes.isNotEmpty() && currentEpIndex != -1 && currentEpIndex < (allEpisodes.size - 1)
 
     // ── Active Stream Source ──────────────────────────────────────────────────
     var activeSource by remember {
         mutableStateOf(
-            sources.firstOrNull { it.url == mediaUrl }
+            activeSourcesList.firstOrNull { it.url == mediaUrl }
                 ?: StreamSourceInfo(name = "Primary Stream", url = mediaUrl, quality = 0, headers = headers)
         )
     }
@@ -158,8 +198,60 @@ fun PlayerScreen(
     var showSubtitlePicker by remember { mutableStateOf(false) }
     var showSpeedPicker by remember { mutableStateOf(false) }
     var showVolumePicker by remember { mutableStateOf(false) }
-    var selectedSubtitle by remember { mutableStateOf<SubtitleTrackInfo?>(subtitles.firstOrNull()) }
+    var selectedSubtitle by remember { mutableStateOf<SubtitleTrackInfo?>(activeSubtitlesList.firstOrNull()) }
     var seekIndicator by remember { mutableStateOf<String?>(null) }
+
+    // ── TV Series Episode Switching Function ─────────────────────────────────
+    fun playEpisode(ep: Episode) {
+        if (isExtractingNextEp) return
+        val targetApiName = apiName.ifBlank { loadResponse?.apiName ?: "" }
+        val api = DesktopPluginLoader.getApiByName(targetApiName) ?: return
+
+        coroutineScope.launch {
+            isExtractingNextEp = true
+            vlcError = null
+            isBuffering = true
+            try {
+                val links = mutableListOf<ExtractorLink>()
+                val subs = mutableListOf<SubtitleTrackInfo>()
+                withContext(Dispatchers.IO) {
+                    api.loadLinks(
+                        data = ep.data,
+                        isCasting = false,
+                        subtitleCallback = { sub: com.lagradost.cloudstream3.SubtitleFile ->
+                            subs.add(SubtitleTrackInfo(url = sub.url, language = sub.lang))
+                        },
+                        callback = { link: ExtractorLink -> links.add(link) }
+                    )
+                }
+                fun rankLink(link: ExtractorLink): Int {
+                    var score = link.quality * 100
+                    val urlLower = link.url.lowercase().trimEnd('/')
+                    val nameLower = link.name.lowercase()
+                    if (urlLower.endsWith(".mkv") || urlLower.endsWith(".mp4") || urlLower.endsWith(".m3u8")) score += 10000
+                    if (nameLower.contains("gb") || nameLower.contains("mb")) score += 5000
+                    return score
+                }
+                val sortedLinks = links.sortedByDescending { rankLink(it) }
+                if (sortedLinks.isNotEmpty()) {
+                    val best = sortedLinks.first()
+                    currentEp = ep
+                    activeEpisodeName = ep.name ?: "S${ep.season}E${ep.episode}"
+                    val newSources = sortedLinks.map { StreamSourceInfo(name = it.name, url = it.url, quality = it.quality, headers = it.headers) }
+                    activeSourcesList = newSources
+                    activeSubtitlesList = subs
+                    selectedSubtitle = subs.firstOrNull()
+                    activeSource = StreamSourceInfo(name = best.name, url = best.url, quality = best.quality, headers = best.headers)
+                } else {
+                    vlcError = "No playable links found for ${ep.name ?: "Episode ${ep.episode}"}"
+                }
+            } catch (e: Exception) {
+                vlcError = "Episode load failed: ${e.localizedMessage}"
+            } finally {
+                isExtractingNextEp = false
+            }
+        }
+    }
 
     // ── Native Decoded Tracks ──────────────────────────────────────────────────
     var audioTracks by remember { mutableStateOf<List<TrackDescription>>(emptyList()) }
@@ -286,7 +378,7 @@ fun PlayerScreen(
     var isFirstPlay by remember { mutableStateOf(true) }
     LaunchedEffect(activeSource.url) {
         if (player != null) {
-            val savedPos = currentPosition
+            val savedPos = if (isFirstPlay) currentPosition else 0L
             vlcError = null
             pendingRawFrame.set(null)
             isBuffering = true
@@ -300,7 +392,7 @@ fun PlayerScreen(
             try {
                 logVlc("Starting LibVLC with MRL: $safeUrl")
                 player.media().play(safeUrl, *opts)
-                if (!isFirstPlay && savedPos > 1000L) {
+                if (isFirstPlay && savedPos > 1000L) {
                     delay(600)
                     try { player.controls().setTime(savedPos) } catch (_: Exception) {}
                 }
@@ -313,13 +405,20 @@ fun PlayerScreen(
     }
 
     // ── Polling & Track Sync ───────────────────────────────────────────────────
-    LaunchedEffect(player) {
+    LaunchedEffect(player, currentEpIndex, hasNextEpisode, isExtractingNextEp) {
         while (isActive) {
             delay(500)
             try {
                 val dur = player?.status()?.length() ?: 0L
                 val pos = player?.status()?.time() ?: 0L
                 if (dur > 0) { totalDuration = dur; currentPosition = pos }
+
+                // Auto-Play Next Episode when current episode is finished
+                if (dur > 30_000L && pos > 0 && (dur - pos) < 2500L && hasNextEpisode && !isExtractingNextEp) {
+                    if (currentEpIndex != -1 && currentEpIndex < allEpisodes.size - 1) {
+                        playEpisode(allEpisodes[currentEpIndex + 1])
+                    }
+                }
 
                 // Fetch live decoded audio and subtitle track descriptions
                 val audioDescs = player?.audio()?.trackDescriptions() ?: emptyList()
@@ -430,63 +529,6 @@ fun PlayerScreen(
         } catch (_: Exception) { try { Desktop.getDesktop().browse(URI(activeSource.url)) } catch (_: Exception) {} }
     }
 
-    // ── Dialogs ───────────────────────────────────────────────────────────────
-    if (showSourcesPicker && sources.isNotEmpty()) {
-        SourcesPickerDialog(
-            sources = sources,
-            currentSource = activeSource,
-            onSelect = { src ->
-                activeSource = src
-                vlcError = null
-                isVideoReady = false
-                showSourcesPicker = false
-            },
-            onDismiss = { showSourcesPicker = false }
-        )
-    }
-
-    if (showAudioTrackPicker) {
-        AudioTrackPickerDialog(
-            tracks = audioTracks,
-            selectedTrackId = selectedAudioTrackId,
-            onSelect = { id -> selectAudioTrack(id); showAudioTrackPicker = false },
-            onDismiss = { showAudioTrackPicker = false }
-        )
-    }
-
-    if (showSubtitlePicker) {
-        CombinedSubtitlePickerDialog(
-            externalSubtitles = subtitles,
-            selectedExternal = selectedSubtitle,
-            nativeTracks = nativeSubTracks,
-            selectedNativeId = selectedSubTrackId,
-            onSelectExternal = { sub -> selectedSubtitle = sub; showSubtitlePicker = false },
-            onSelectNative = { id -> selectNativeSubTrack(id); showSubtitlePicker = false },
-            onDismiss = { showSubtitlePicker = false }
-        )
-    }
-
-    if (showSpeedPicker) {
-        SpeedPickerDialog(
-            current = playbackSpeed,
-            onSelect = { setSpeed(it); showSpeedPicker = false },
-            onDismiss = { showSpeedPicker = false }
-        )
-    }
-
-    if (showVolumePicker) {
-        VolumeDialog(
-            volume = volume,
-            isMuted = isMuted,
-            onVolumeChange = { setVolume(it) },
-            onMuteToggle = {
-                isMuted = !isMuted
-                try { player?.audio()?.isMute = isMuted } catch (_: Exception) {}
-            },
-            onDismiss = { showVolumePicker = false }
-        )
-    }
-
     // ── Render ────────────────────────────────────────────────────────────────
     Box(
         modifier = modifier
@@ -501,6 +543,13 @@ fun PlayerScreen(
                             else false
                         }
                         Key.Spacebar -> { togglePlayPause(); true }
+                        Key.DirectionRight -> { seekBy(10_000L); true }
+                        Key.DirectionLeft -> { seekBy(-10_000L); true }
+                        Key.M -> {
+                            isMuted = !isMuted
+                            try { player?.audio()?.isMute = isMuted } catch (_: Exception) {}
+                            true
+                        }
                         else -> false
                     }
                 } else false
@@ -578,7 +627,7 @@ fun PlayerScreen(
             } else {
                 PlayerControlsOverlay(
                     title = title,
-                    episodeName = episodeName,
+                    episodeName = activeEpisodeName,
                     activeSourceName = activeSource.name,
                     isPlaying = isPlaying,
                     isMuted = isMuted,
@@ -586,9 +635,12 @@ fun PlayerScreen(
                     playbackSpeed = playbackSpeed,
                     currentPosition = currentPosition,
                     totalDuration = totalDuration,
-                    hasSources = sources.size > 1,
+                    hasEpisodes = allEpisodes.isNotEmpty(),
+                    hasPrevEpisode = hasPrevEpisode,
+                    hasNextEpisode = hasNextEpisode,
+                    hasSources = activeSourcesList.size > 1,
                     hasAudioTracks = audioTracks.isNotEmpty(),
-                    hasSubtitles = subtitles.isNotEmpty() || nativeSubTracks.isNotEmpty(),
+                    hasSubtitles = activeSubtitlesList.isNotEmpty() || nativeSubTracks.isNotEmpty(),
                     hasVideo = videoFrame != null,
                     isFullscreen = isFullscreen,
                     onToggleFullscreen = onToggleFullscreen,
@@ -606,6 +658,8 @@ fun PlayerScreen(
                     onSeekForward30 = { seekBy(30_000) },
                     onSeekBack10 = { seekBy(-10_000) },
                     onSeekForward10 = { seekBy(10_000) },
+                    onPrevEpisode = { if (hasPrevEpisode) playEpisode(allEpisodes[currentEpIndex - 1]) },
+                    onNextEpisode = { if (hasNextEpisode) playEpisode(allEpisodes[currentEpIndex + 1]) },
                     onSeek = { pct ->
                         val seekTo = (pct * totalDuration).toLong()
                         currentPosition = seekTo
@@ -617,6 +671,7 @@ fun PlayerScreen(
                     },
                     onVolumeClick = { showVolumePicker = true },
                     onSpeedClick = { showSpeedPicker = true },
+                    onEpisodesClick = { showEpisodesPicker = true },
                     onSourcesClick = { showSourcesPicker = true },
                     onAudioTracksClick = { showAudioTrackPicker = true },
                     onSubtitleClick = { showSubtitlePicker = true },
@@ -625,6 +680,73 @@ fun PlayerScreen(
                 )
             }
         }
+
+        // ── Sidebar Drawers (smooth fade-in background scrim + slide-in sidebar) ──
+        if (allEpisodes.isNotEmpty()) {
+            EpisodesPickerDialog(
+                visible = showEpisodesPicker,
+                episodes = allEpisodes,
+                currentEpisodeIndex = currentEpIndex,
+                onSelect = { ep ->
+                    playEpisode(ep)
+                    showEpisodesPicker = false
+                },
+                onDismiss = { showEpisodesPicker = false }
+            )
+        }
+
+        if (activeSourcesList.isNotEmpty()) {
+            SourcesPickerDialog(
+                visible = showSourcesPicker,
+                sources = activeSourcesList,
+                currentSource = activeSource,
+                onSelect = { src ->
+                    activeSource = src
+                    vlcError = null
+                    isVideoReady = false
+                    showSourcesPicker = false
+                },
+                onDismiss = { showSourcesPicker = false }
+            )
+        }
+
+        AudioTrackPickerDialog(
+            visible = showAudioTrackPicker,
+            tracks = audioTracks,
+            selectedTrackId = selectedAudioTrackId,
+            onSelect = { id -> selectAudioTrack(id); showAudioTrackPicker = false },
+            onDismiss = { showAudioTrackPicker = false }
+        )
+
+        CombinedSubtitlePickerDialog(
+            visible = showSubtitlePicker,
+            externalSubtitles = activeSubtitlesList,
+            selectedExternal = selectedSubtitle,
+            nativeTracks = nativeSubTracks,
+            selectedNativeId = selectedSubTrackId,
+            onSelectExternal = { sub -> selectedSubtitle = sub; showSubtitlePicker = false },
+            onSelectNative = { id -> selectNativeSubTrack(id); showSubtitlePicker = false },
+            onDismiss = { showSubtitlePicker = false }
+        )
+
+        SpeedPickerDialog(
+            visible = showSpeedPicker,
+            current = playbackSpeed,
+            onSelect = { setSpeed(it); showSpeedPicker = false },
+            onDismiss = { showSpeedPicker = false }
+        )
+
+        VolumeDialog(
+            visible = showVolumePicker,
+            volume = volume,
+            isMuted = isMuted,
+            onVolumeChange = { setVolume(it) },
+            onMuteToggle = {
+                isMuted = !isMuted
+                try { player?.audio()?.isMute = isMuted } catch (_: Exception) {}
+            },
+            onDismiss = { showVolumePicker = false }
+        )
     }
 }
 
@@ -641,6 +763,9 @@ private fun PlayerControlsOverlay(
     playbackSpeed: Float,
     currentPosition: Long,
     totalDuration: Long,
+    hasEpisodes: Boolean,
+    hasPrevEpisode: Boolean,
+    hasNextEpisode: Boolean,
     hasSources: Boolean,
     hasAudioTracks: Boolean,
     hasSubtitles: Boolean,
@@ -655,10 +780,13 @@ private fun PlayerControlsOverlay(
     onSeekForward30: () -> Unit,
     onSeekBack10: () -> Unit,
     onSeekForward10: () -> Unit,
+    onPrevEpisode: () -> Unit,
+    onNextEpisode: () -> Unit,
     onSeek: (Float) -> Unit,
     onMuteToggle: () -> Unit,
     onVolumeClick: () -> Unit,
     onSpeedClick: () -> Unit,
+    onEpisodesClick: () -> Unit,
     onSourcesClick: () -> Unit,
     onAudioTracksClick: () -> Unit,
     onSubtitleClick: () -> Unit,
@@ -711,14 +839,29 @@ private fun PlayerControlsOverlay(
                 }
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                // Episodes Selector Button
+                if (hasEpisodes) {
+                    OutlinedButton(
+                        onClick = onEpisodesClick,
+                        shape = RoundedCornerShape(6.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0xFF272727), contentColor = Color.White),
+                        border = BorderStroke(1.dp, Color.White.copy(0.2f)),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Icon(Icons.Default.FormatListBulleted, null, modifier = Modifier.size(14.dp), tint = Color.White)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Episodes", fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
+
                 // Sources / Mirrors Button
                 if (hasSources) {
                     OutlinedButton(
                         onClick = onSourcesClick,
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                        border = BorderStroke(1.dp, Color.White.copy(0.3f)),
+                        shape = RoundedCornerShape(6.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0xFF272727), contentColor = Color.White),
+                        border = BorderStroke(1.dp, Color.White.copy(0.2f)),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Icon(Icons.Default.Dns, null, modifier = Modifier.size(14.dp))
@@ -734,25 +877,30 @@ private fun PlayerControlsOverlay(
                     }
                     Spacer(Modifier.width(4.dp))
                 }
-
-                IconButton(onClick = onExternalVlc) {
-                    Icon(Icons.Default.OpenInNew, null, tint = Color.White.copy(0.8f))
-                }
             }
         }
 
-        // ── CENTRE: Play/Pause + ±30s ─────────────────────────────────────────
+        // ── CENTRE: Prev Ep + -30s + Play/Pause + +30s + Next Ep ───────────────
         if (hasVideo) {
             Row(
                 modifier = Modifier.align(Alignment.Center),
-                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // -30s
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    IconButton(onClick = onSeekBack30, modifier = Modifier.size(52.dp)) {
-                        Icon(Icons.Default.Replay30, null, tint = Color.White, modifier = Modifier.size(36.dp))
+                // Prev Episode
+                if (hasEpisodes) {
+                    IconButton(onClick = onPrevEpisode, enabled = hasPrevEpisode, modifier = Modifier.size(44.dp)) {
+                        Icon(
+                            Icons.Default.SkipPrevious, null,
+                            tint = if (hasPrevEpisode) Color.White else Color.Gray.copy(0.4f),
+                            modifier = Modifier.size(32.dp)
+                        )
                     }
+                }
+
+                // -30s
+                IconButton(onClick = onSeekBack30, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Default.Replay30, null, tint = Color.White, modifier = Modifier.size(34.dp))
                 }
 
                 // Play/Pause big
@@ -771,9 +919,18 @@ private fun PlayerControlsOverlay(
                 }
 
                 // +30s
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    IconButton(onClick = onSeekForward30, modifier = Modifier.size(52.dp)) {
-                        Icon(Icons.Default.Forward30, null, tint = Color.White, modifier = Modifier.size(36.dp))
+                IconButton(onClick = onSeekForward30, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Default.Forward30, null, tint = Color.White, modifier = Modifier.size(34.dp))
+                }
+
+                // Next Episode
+                if (hasEpisodes) {
+                    IconButton(onClick = onNextEpisode, enabled = hasNextEpisode, modifier = Modifier.size(44.dp)) {
+                        Icon(
+                            Icons.Default.SkipNext, null,
+                            tint = if (hasNextEpisode) Color.White else Color.Gray.copy(0.4f),
+                            modifier = Modifier.size(32.dp)
+                        )
                     }
                 }
             }
@@ -892,7 +1049,7 @@ private fun LockedOverlay(onUnlock: () -> Unit) {
 // ─── Sources & Mirrors Picker Dialog ──────────────────────────────────────────
 
 private fun cleanServerTitle(rawName: String): String {
-    val tokens = rawName.split("|", "•", "-").map { it.trim() }.filter { it.isNotBlank() }
+    val tokens = rawName.split("|", "•").map { it.trim() }.filter { it.isNotBlank() }
     val seen = mutableSetOf<String>()
     val result = mutableListOf<String>()
     for (t in tokens) {
@@ -916,157 +1073,210 @@ private fun detectQualityLabel(source: StreamSourceInfo): String {
     }
 }
 
+// ─── Reusable Full Height Right Sidebar Drawer Container ───────────────────────
+
+@Composable
+private fun RightSidebarDrawer(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    width: Dp = 440.dp,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(200, easing = FastOutSlowInEasing)),
+        exit = fadeOut(tween(180, easing = FastOutSlowInEasing)),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(0.65f))
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                    onClick = onDismiss
+                )
+        ) {
+            AnimatedVisibility(
+                visible = visible,
+                enter = slideInHorizontally(
+                    initialOffsetX = { fullWidth -> fullWidth },
+                    animationSpec = tween(280, easing = FastOutSlowInEasing)
+                ),
+                exit = slideOutHorizontally(
+                    targetOffsetX = { fullWidth -> fullWidth },
+                    animationSpec = tween(220, easing = FastOutSlowInEasing)
+                ),
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(width)
+                    .align(Alignment.CenterEnd)
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() },
+                            onClick = {}
+                        ),
+                    color = Color(0xFF141414).copy(0.98f),
+                    shadowElevation = 24.dp,
+                    border = BorderStroke(1.dp, Color.White.copy(0.12f))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 20.dp)
+                    ) {
+                        content()
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─── Sources Picker Sidebar ───────────────────────────────────────────────────
+
 @Composable
 private fun SourcesPickerDialog(
+    visible: Boolean,
     sources: List<StreamSourceInfo>,
     currentSource: StreamSourceInfo,
     onSelect: (StreamSourceInfo) -> Unit,
     onDismiss: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF0E0E14)),
-            border = BorderStroke(1.dp, Color(0xFF262636)),
-            modifier = Modifier.width(540.dp)
+    RightSidebarDrawer(visible = visible, onDismiss = onDismiss, width = 460.dp) {
+        // Aligned Header
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                // Header Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.primary.copy(0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Dns, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                "Stream Sources & Mirrors",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = Color.White
-                            )
-                            Text(
-                                "${sources.size} mirror servers available",
-                                color = Color.Gray,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Close, "Close", tint = Color.Gray, modifier = Modifier.size(18.dp))
-                    }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Dns, null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text(
+                        "Stream Sources",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White
+                    )
+                    Text(
+                        "${sources.size} mirror servers available",
+                        color = Color.White.copy(0.6f),
+                        fontSize = 12.sp
+                    )
                 }
+            }
+            IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.Close, "Close", tint = Color.White.copy(0.7f), modifier = Modifier.size(18.dp))
+            }
+        }
 
-                Spacer(Modifier.height(16.dp))
+        HorizontalDivider(color = Color.White.copy(0.08f))
+        Spacer(Modifier.height(14.dp))
 
-                // Scrollable Sources list
-                Column(
+        // Full Height Scrollable Item List
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            sources.forEach { source ->
+                val isSelected = source.url == currentSource.url || source == currentSource
+                val qualityLabel = detectQualityLabel(source)
+                val cleanedTitle = cleanServerTitle(source.name)
+
+                Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 380.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                        .clickable { onSelect(source) },
+                    shape = RoundedCornerShape(6.dp),
+                    color = if (isSelected) Color(0xFF2D2D2D) else Color(0xFF272727),
+                    border = BorderStroke(
+                        1.dp,
+                        if (isSelected) Color.White.copy(0.12f) else Color.Transparent
+                    )
                 ) {
-                    sources.forEach { source ->
-                        val isSelected = source.url == currentSource.url || source == currentSource
-                        val qualityLabel = detectQualityLabel(source)
-                        val cleanedTitle = cleanServerTitle(source.name)
-                        val isDirectFile = source.url.lowercase().run {
-                            endsWith(".mkv") || endsWith(".mp4") || endsWith(".m3u8") || contains("/movies/") || contains("gb") || contains("mb")
-                        }
-
-                        Card(
+                    Row(
+                        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Windows 11 Accent Left Bar
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onSelect(source) },
-                            shape = RoundedCornerShape(8.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (isSelected) Color(0xFF221115) else Color(0xFF14141F)
-                            ),
-                            border = BorderStroke(
-                                1.dp,
-                                if (isSelected) MaterialTheme.colorScheme.primary else Color(0xFF1F1F2E)
-                            )
+                                .width(4.dp)
+                                .fillMaxHeight()
+                                .background(
+                                    if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                    shape = RoundedCornerShape(2.dp)
+                                )
+                        )
+
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            // Quality Badge Pill
+                            val (badgeBg, badgeTextColor) = when (qualityLabel) {
+                                "4K" -> Pair(Color(0xFFD97706), Color.White)
+                                "1080p" -> Pair(MaterialTheme.colorScheme.primary, Color.White)
+                                else -> Pair(Color(0xFF3F3F46), Color.White)
+                            }
+                            Surface(
+                                color = badgeBg,
+                                shape = RoundedCornerShape(4.dp)
                             ) {
-                                // Quality Badge
-                                val (badgeBg, badgeBorder, badgeTextColor) = when (qualityLabel) {
-                                    "4K" -> Triple(Color(0xFF2E2205), Color(0xFFFFB300), Color(0xFFFFC107))
-                                    "1080p" -> Triple(Color(0xFF2C0A0D), MaterialTheme.colorScheme.primary, Color(0xFFFF5252))
-                                    else -> Triple(Color(0xFF072133), Color(0xFF0288D1), Color(0xFF40C4FF))
-                                }
-                                Surface(
-                                    color = badgeBg,
-                                    shape = RoundedCornerShape(4.dp),
-                                    border = BorderStroke(1.dp, badgeBorder)
-                                ) {
-                                    Text(
-                                        qualityLabel,
-                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                                        color = badgeTextColor,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
+                                Text(
+                                    qualityLabel,
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                    color = badgeTextColor,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
 
-                                // Server title & URL
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        cleanedTitle,
-                                        color = Color.White,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        fontSize = 13.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Spacer(Modifier.height(2.dp))
-                                    Text(
-                                        source.url,
-                                        color = Color.Gray,
-                                        fontSize = 11.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
+                            // Title & Domain URL
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    cleanedTitle,
+                                    color = Color.White,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    source.url,
+                                    color = Color.White.copy(0.5f),
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
 
-                                // Direct File Badge
-                                if (isDirectFile) {
-                                    Surface(
-                                        color = Color(0xFF0A2912),
-                                        shape = RoundedCornerShape(4.dp),
-                                        border = BorderStroke(1.dp, Color(0xFF1B5E20))
-                                    ) {
-                                        Text(
-                                            "⚡ Direct",
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                            color = Color(0xFF4CAF50),
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-
-                                // Selection Check Icon
+                            // Windows 11 Selection Checkmark
+                            if (isSelected) {
                                 Icon(
-                                    if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                    Icons.Default.Check,
                                     null,
-                                    tint = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray.copy(0.3f),
-                                    modifier = Modifier.size(20.dp)
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                         }
@@ -1077,7 +1287,7 @@ private fun SourcesPickerDialog(
     }
 }
 
-// ─── Audio Track Picker Dialog ────────────────────────────────────────────────
+// ─── Audio Track Picker Sidebar ───────────────────────────────────────────────
 
 private fun cleanAudioTrackName(rawName: String): String {
     val name = rawName.trim()
@@ -1091,116 +1301,107 @@ private fun cleanAudioTrackName(rawName: String): String {
 
 @Composable
 private fun AudioTrackPickerDialog(
+    visible: Boolean,
     tracks: List<TrackDescription>,
     selectedTrackId: Int?,
     onSelect: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF0E0E14)),
-            border = BorderStroke(1.dp, Color(0xFF262636)),
-            modifier = Modifier.width(480.dp)
+    RightSidebarDrawer(visible = visible, onDismiss = onDismiss, width = 420.dp) {
+        // Aligned Header
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                // Header Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.primary.copy(0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Audiotrack, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                "Audio Track",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = Color.White
-                            )
-                            Text(
-                                "Select active audio stream language",
-                                color = Color.Gray,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Close, "Close", tint = Color.Gray, modifier = Modifier.size(18.dp))
-                    }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Audiotrack, null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text(
+                        "Audio Track",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White
+                    )
+                    Text(
+                        "Select active audio stream language",
+                        color = Color.White.copy(0.6f),
+                        fontSize = 12.sp
+                    )
                 }
+            }
+            IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.Close, "Close", tint = Color.White.copy(0.7f), modifier = Modifier.size(18.dp))
+            }
+        }
 
-                Spacer(Modifier.height(16.dp))
+        HorizontalDivider(color = Color.White.copy(0.08f))
+        Spacer(Modifier.height(14.dp))
 
-                // Scrollable Tracks List
-                Column(
+        // Full Height Item List
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            tracks.forEach { track ->
+                val isSelected = track.id() == selectedTrackId
+                val cleanName = cleanAudioTrackName(track.description())
+
+                Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 360.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                        .clickable { onSelect(track.id()) },
+                    shape = RoundedCornerShape(6.dp),
+                    color = if (isSelected) Color(0xFF2D2D2D) else Color(0xFF272727),
+                    border = BorderStroke(
+                        1.dp,
+                        if (isSelected) Color.White.copy(0.12f) else Color.Transparent
+                    )
                 ) {
-                    tracks.forEach { track ->
-                        val isSelected = track.id() == selectedTrackId
-                        val cleanName = cleanAudioTrackName(track.description())
-
-                        Card(
+                    Row(
+                        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Windows 11 Accent Left Bar
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onSelect(track.id()) },
-                            shape = RoundedCornerShape(8.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (isSelected) Color(0xFF221115) else Color(0xFF14141F)
-                            ),
-                            border = BorderStroke(
-                                1.dp,
-                                if (isSelected) MaterialTheme.colorScheme.primary else Color(0xFF1F1F2E)
-                            )
+                                .width(4.dp)
+                                .fillMaxHeight()
+                                .background(
+                                    if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                    shape = RoundedCornerShape(2.dp)
+                                )
+                        )
+
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                                        null,
-                                        tint = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray.copy(0.3f),
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(Modifier.width(12.dp))
-                                    Text(
-                                        cleanName,
-                                        color = Color.White,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        fontSize = 13.sp
-                                    )
-                                }
-                                if (track.id() == -1) {
-                                    Surface(
-                                        color = Color.Gray.copy(0.15f),
-                                        shape = RoundedCornerShape(4.dp)
-                                    ) {
-                                        Text(
-                                            "Mute",
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                            color = Color.LightGray,
-                                            fontSize = 10.sp
-                                        )
-                                    }
-                                }
+                            Text(
+                                cleanName,
+                                color = Color.White,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                fontSize = 13.sp
+                            )
+                            if (isSelected) {
+                                Icon(
+                                    Icons.Default.Check,
+                                    null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
                         }
                     }
@@ -1210,10 +1411,11 @@ private fun AudioTrackPickerDialog(
     }
 }
 
-// ─── Combined Subtitle Picker Dialog ──────────────────────────────────────────
+// ─── Combined Subtitle Picker Sidebar ──────────────────────────────────────────
 
 @Composable
 private fun CombinedSubtitlePickerDialog(
+    visible: Boolean,
     externalSubtitles: List<SubtitleTrackInfo>,
     selectedExternal: SubtitleTrackInfo?,
     nativeTracks: List<TrackDescription>,
@@ -1222,86 +1424,247 @@ private fun CombinedSubtitlePickerDialog(
     onSelectNative: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF0E0E14)),
-            border = BorderStroke(1.dp, Color(0xFF262636)),
-            modifier = Modifier.width(480.dp)
+    RightSidebarDrawer(visible = visible, onDismiss = onDismiss, width = 440.dp) {
+        // Aligned Header
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                // Header Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.primary.copy(0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.ClosedCaption, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                "Subtitles",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = Color.White
-                            )
-                            Text(
-                                "Select subtitles track or embedded stream",
-                                color = Color.Gray,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Close, "Close", tint = Color.Gray, modifier = Modifier.size(18.dp))
-                    }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.ClosedCaption, null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text(
+                        "Subtitles",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White
+                    )
+                    Text(
+                        "Select subtitles track or embedded stream",
+                        color = Color.White.copy(0.6f),
+                        fontSize = 12.sp
+                    )
                 }
+            }
+            IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.Close, "Close", tint = Color.White.copy(0.7f), modifier = Modifier.size(18.dp))
+            }
+        }
 
-                Spacer(Modifier.height(16.dp))
+        HorizontalDivider(color = Color.White.copy(0.08f))
+        Spacer(Modifier.height(14.dp))
 
-                // Scrollable Subtitles List
-                Column(
+        // Full Height Scrollable Subtitles List
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            // Off Option
+            SubtitleOption("Off", selectedExternal == null && (selectedNativeId == null || selectedNativeId == -1), onClick = {
+                onSelectExternal(null)
+                onSelectNative(-1)
+            })
+
+            // Native Demuxed Tracks
+            if (nativeTracks.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                Text("Embedded Subtitles", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                nativeTracks.filter { it.id() != -1 }.forEach { track ->
+                    val isSelected = track.id() == selectedNativeId
+                    SubtitleOption(cleanAudioTrackName(track.description()), isSelected, onClick = { onSelectNative(track.id()) })
+                }
+            }
+
+            // External Fetched Subtitles
+            if (externalSubtitles.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                Text("External Subtitles", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                externalSubtitles.forEach { track ->
+                    val isSelected = track == selectedExternal
+                    SubtitleOption(
+                        track.language.ifBlank { track.url.substringAfterLast('/') },
+                        isSelected,
+                        onClick = { onSelectExternal(track) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EpisodesPickerDialog(
+    visible: Boolean,
+    episodes: List<Episode>,
+    currentEpisodeIndex: Int,
+    onSelect: (Episode) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val seasons = remember(episodes) { episodes.mapNotNull { it.season }.distinct().sorted() }
+    var selectedSeason by remember { mutableStateOf(episodes.getOrNull(currentEpisodeIndex)?.season ?: seasons.firstOrNull() ?: 1) }
+
+    val seasonEpisodes = remember(episodes, selectedSeason) {
+        if (seasons.size > 1) {
+            episodes.filter { it.season == selectedSeason || (it.season == null && selectedSeason == 1) }
+        } else episodes
+    }
+
+    RightSidebarDrawer(visible = visible, onDismiss = onDismiss, width = 480.dp) {
+        // Aligned Header
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.VideoLibrary, null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text(
+                        "Episodes",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White
+                    )
+                    Text(
+                        "${episodes.size} episodes available",
+                        color = Color.White.copy(0.6f),
+                        fontSize = 12.sp
+                    )
+                }
+            }
+            IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.Close, "Close", tint = Color.White.copy(0.7f), modifier = Modifier.size(18.dp))
+            }
+        }
+
+        HorizontalDivider(color = Color.White.copy(0.08f))
+
+        // Season Tabs
+        if (seasons.size > 1) {
+            Spacer(Modifier.height(12.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(seasons) { season ->
+                    FilterChip(
+                        selected = selectedSeason == season,
+                        onClick = { selectedSeason = season },
+                        label = { Text("Season $season", fontSize = 12.sp, fontWeight = if (selectedSeason == season) FontWeight.Bold else FontWeight.Normal) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                            selectedLabelColor = Color.White,
+                            containerColor = Color(0xFF272727),
+                            labelColor = Color.White.copy(0.7f)
+                        )
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        // Scrollable Episodes List (Full Height Sidebar)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            seasonEpisodes.forEach { ep ->
+                val isSelected = episodes.getOrNull(currentEpisodeIndex)?.data == ep.data
+                val epLabel = "S${ep.season ?: 1}:E${ep.episode ?: (seasonEpisodes.indexOf(ep) + 1)}"
+
+                Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 360.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                        .clickable { onSelect(ep) },
+                    shape = RoundedCornerShape(6.dp),
+                    color = if (isSelected) Color(0xFF2D2D2D) else Color(0xFF272727),
+                    border = BorderStroke(
+                        1.dp,
+                        if (isSelected) Color.White.copy(0.12f) else Color.Transparent
+                    )
                 ) {
-                    // Off Option
-                    SubtitleOption("Off", selectedExternal == null && (selectedNativeId == null || selectedNativeId == -1), onClick = {
-                        onSelectExternal(null)
-                        onSelectNative(-1)
-                    })
+                    Row(
+                        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Left Accent bar when selected
+                        Box(
+                            modifier = Modifier
+                                .width(4.dp)
+                                .fillMaxHeight()
+                                .background(
+                                    if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                    shape = RoundedCornerShape(2.dp)
+                                )
+                        )
 
-                    // Native Demuxed Tracks
-                    if (nativeTracks.isNotEmpty()) {
-                        Spacer(Modifier.height(4.dp))
-                        Text("Embedded Subtitles", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        nativeTracks.filter { it.id() != -1 }.forEach { track ->
-                            val isSelected = track.id() == selectedNativeId
-                            SubtitleOption(cleanAudioTrackName(track.description()), isSelected, onClick = { onSelectNative(track.id()) })
-                        }
-                    }
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Surface(
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else Color(0xFF3F3F46),
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    epLabel,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
 
-                    // External Fetched Subtitles
-                    if (externalSubtitles.isNotEmpty()) {
-                        Spacer(Modifier.height(4.dp))
-                        Text("External Subtitles", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        externalSubtitles.forEach { track ->
-                            val isSelected = track == selectedExternal
-                            SubtitleOption(
-                                track.language.ifBlank { track.url.substringAfterLast('/') },
-                                isSelected,
-                                onClick = { onSelectExternal(track) }
-                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    ep.name ?: epLabel,
+                                    color = Color.White,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                ep.description?.let { desc ->
+                                    if (desc.isNotBlank()) {
+                                        Spacer(Modifier.height(2.dp))
+                                        Text(
+                                            desc,
+                                            color = Color.White.copy(0.5f),
+                                            fontSize = 11.sp,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (isSelected) {
+                                Icon(
+                                    Icons.Default.Check, null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -1312,149 +1675,131 @@ private fun CombinedSubtitlePickerDialog(
 
 @Composable
 private fun SubtitleOption(label: String, isSelected: Boolean, onClick: () -> Unit) {
-    Card(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) Color(0xFF221115) else Color(0xFF14141F)
-        ),
+        shape = RoundedCornerShape(6.dp),
+        color = if (isSelected) Color(0xFF2D2D2D) else Color(0xFF272727),
         border = BorderStroke(
             1.dp,
-            if (isSelected) MaterialTheme.colorScheme.primary else Color(0xFF1F1F2E)
+            if (isSelected) Color.White.copy(0.12f) else Color.Transparent
         )
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                null,
-                tint = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray.copy(0.3f),
-                modifier = Modifier.size(20.dp)
+            // Windows 11 Accent Left Bar
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .fillMaxHeight()
+                    .background(
+                        if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                        shape = RoundedCornerShape(2.dp)
+                    )
             )
-            Spacer(Modifier.width(12.dp))
-            Text(
-                label,
-                color = Color.White,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                fontSize = 13.sp
-            )
-        }
-    }
-}
 
-// ─── Speed Picker ─────────────────────────────────────────────────────────────
-
-@Composable
-private fun SpeedPickerDialog(current: Float, onSelect: (Float) -> Unit, onDismiss: () -> Unit) {
-    val speeds = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f)
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF0E0E14)),
-            border = BorderStroke(1.dp, Color(0xFF262636)),
-            modifier = Modifier.width(360.dp)
-        ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Playback Speed", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = Color.White)
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Default.Close, "Close", tint = Color.Gray, modifier = Modifier.size(16.dp))
-                    }
-                }
-                Spacer(Modifier.height(14.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    speeds.forEach { speed ->
-                        val isSelected = speed == current
-                        Card(
-                            modifier = Modifier.fillMaxWidth().clickable { onSelect(speed) },
-                            shape = RoundedCornerShape(8.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (isSelected) Color(0xFF221115) else Color(0xFF14141F)
-                            ),
-                            border = BorderStroke(1.dp, if (isSelected) MaterialTheme.colorScheme.primary else Color(0xFF1F1F2E))
-                        ) {
-                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                                    null, tint = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray.copy(0.3f),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(Modifier.width(12.dp))
-                                Text(
-                                    "${speed}x${if (speed == 1.0f) " (Normal)" else ""}",
-                                    color = Color.White, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    fontSize = 13.sp
-                                )
-                            }
-                        }
-                    }
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    label,
+                    color = Color.White,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                    fontSize = 13.sp
+                )
+                if (isSelected) {
+                    Icon(
+                        Icons.Default.Check,
+                        null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
         }
     }
 }
 
-// ─── Volume Dialog ────────────────────────────────────────────────────────────
+// ─── Speed Picker Sidebar ─────────────────────────────────────────────────────
+
+@Composable
+private fun SpeedPickerDialog(visible: Boolean, current: Float, onSelect: (Float) -> Unit, onDismiss: () -> Unit) {
+    val speeds = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f)
+    RightSidebarDrawer(visible = visible, onDismiss = onDismiss, width = 360.dp) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Playback Speed", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White)
+            IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                Icon(Icons.Default.Close, "Close", tint = Color.White.copy(0.7f), modifier = Modifier.size(16.dp))
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        Column(
+            modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            speeds.forEach { speed ->
+                val isSelected = speed == current
+                SubtitleOption("${speed}x${if (speed == 1.0f) " (Normal)" else ""}", isSelected, onClick = { onSelect(speed) })
+            }
+        }
+    }
+}
+
+// ─── Volume Sidebar ───────────────────────────────────────────────────────────
 
 @Composable
 private fun VolumeDialog(
+    visible: Boolean,
     volume: Int, isMuted: Boolean,
     onVolumeChange: (Int) -> Unit,
     onMuteToggle: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF0E0E14)),
-            border = BorderStroke(1.dp, Color(0xFF262636))
+    RightSidebarDrawer(visible = visible, onDismiss = onDismiss, width = 360.dp) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.padding(20.dp).widthIn(min = 300.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Volume", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = Color.White)
-                        Spacer(Modifier.width(8.dp))
-                        Text("${volume}%", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    }
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Default.Close, "Close", tint = Color.Gray, modifier = Modifier.size(16.dp))
-                    }
-                }
-                Spacer(Modifier.height(14.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onMuteToggle) {
-                        Icon(if (isMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp, null, tint = if (isMuted) MaterialTheme.colorScheme.error else Color.White)
-                    }
-                    Slider(
-                        value = volume.toFloat(),
-                        onValueChange = { onVolumeChange(it.toInt()) },
-                        valueRange = 0f..200f,
-                        modifier = Modifier.weight(1f),
-                        colors = SliderDefaults.colors(
-                            thumbColor = MaterialTheme.colorScheme.primary,
-                            activeTrackColor = MaterialTheme.colorScheme.primary,
-                            inactiveTrackColor = Color.White.copy(0.15f)
-                        )
-                    )
-                }
-                if (volume > 100) {
-                    Text("⚠ Volume above 100% may distort audio", color = Color(0xFFFFB300), fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp, top = 4.dp))
-                }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Volume", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = Color.White)
+                Spacer(Modifier.width(8.dp))
+                Text("${volume}%", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
+            IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                Icon(Icons.Default.Close, "Close", tint = Color.Gray, modifier = Modifier.size(16.dp))
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onMuteToggle) {
+                Icon(if (isMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp, null, tint = if (isMuted) MaterialTheme.colorScheme.error else Color.White)
+            }
+            Slider(
+                value = volume.toFloat(),
+                onValueChange = { onVolumeChange(it.toInt()) },
+                valueRange = 0f..200f,
+                modifier = Modifier.weight(1f),
+                colors = SliderDefaults.colors(
+                    thumbColor = MaterialTheme.colorScheme.primary,
+                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                    inactiveTrackColor = Color.White.copy(0.15f)
+                )
+            )
+        }
+        if (volume > 100) {
+            Text("⚠ Volume above 100% may distort audio", color = Color(0xFFFFB300), fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp, top = 4.dp))
         }
     }
 }

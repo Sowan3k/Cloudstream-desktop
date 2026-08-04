@@ -140,6 +140,8 @@ fun main() {
                                         subtitles = screen.subtitles,
                                         sources = screen.sources,
                                         loadResponse = screen.loadResponse,
+                                        currentEpisode = screen.currentEpisode,
+                                        apiName = screen.apiName,
                                         isFullscreen = isFullscreen,
                                         onToggleFullscreen = toggleFullscreen,
                                         onBack = { navigateBack() }

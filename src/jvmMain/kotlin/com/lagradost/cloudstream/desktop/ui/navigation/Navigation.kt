@@ -3,6 +3,8 @@ package com.lagradost.cloudstream.desktop.ui.navigation
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.SearchResponse
 
+import com.lagradost.cloudstream3.Episode
+
 sealed class DesktopScreen {
     data object Home : DesktopScreen()
     data class Search(val query: String = "") : DesktopScreen()
@@ -15,7 +17,9 @@ sealed class DesktopScreen {
         val headers: Map<String, String> = emptyMap(),
         val subtitles: List<SubtitleTrackInfo> = emptyList(),
         val sources: List<StreamSourceInfo> = emptyList(),
-        val loadResponse: LoadResponse? = null
+        val loadResponse: LoadResponse? = null,
+        val currentEpisode: Episode? = null,
+        val apiName: String = ""
     ) : DesktopScreen()
     data object Library : DesktopScreen()
     data object Plugins : DesktopScreen()
