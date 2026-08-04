@@ -211,6 +211,7 @@ fun PlayerScreen(
             isExtractingNextEp = true
             vlcError = null
             isBuffering = true
+            currentPosition = 0L
             try {
                 val links = mutableListOf<ExtractorLink>()
                 val subs = mutableListOf<SubtitleTrackInfo>()
@@ -259,8 +260,19 @@ fun PlayerScreen(
     var selectedAudioTrackId by remember { mutableStateOf<Int?>(null) }
     var selectedSubTrackId by remember { mutableStateOf<Int?>(null) }
 
-    // ── Lock-free Atomic Frame Buffer & Frame Ticker ──────────────────────────
+    // ── Zero-GC Pooled Frame Buffer & Lock-free Frame Ticker ─────────────────
     class RawFrameData(val pixels: IntArray, val width: Int, val height: Int)
+    val arrayPool = remember { java.util.concurrent.ConcurrentLinkedQueue<IntArray>() }
+
+    fun obtainPixelArray(size: Int): IntArray {
+        val existing = arrayPool.poll()
+        return if (existing != null && existing.size >= size) existing else IntArray(size)
+    }
+
+    fun recyclePixelArray(arr: IntArray) {
+        if (arrayPool.size < 8) arrayPool.offer(arr)
+    }
+
     val pendingRawFrame = remember { java.util.concurrent.atomic.AtomicReference<RawFrameData?>(null) }
     val frameBuffer = remember {
         object {
@@ -276,7 +288,7 @@ fun PlayerScreen(
         }
     }
 
-    // 60fps Frame Ticker — consumes latest frame without EDT queue backlog
+    // 60fps Frame Ticker — zero-alloc transfer of raw pixels to Compose ImageBitmap
     LaunchedEffect(Unit) {
         while (isActive) {
             val raw = pendingRawFrame.getAndSet(null)
@@ -288,13 +300,15 @@ fun PlayerScreen(
                     videoFrame = image.toComposeImageBitmap()
                     isVideoReady = true
                     if (isBuffering) isBuffering = false
-                } catch (_: Exception) {}
+                } catch (_: Exception) {
+                } finally {
+                    recyclePixelArray(raw.pixels)
+                }
             }
             delay(16)
         }
     }
 
-    // ── Zero-GC Pooled Frame Buffer ───────────────────────────────────────────
     // ── VLC Setup (Created ONCE for lifetime of PlayerScreen) ───────────────────
     val factoryAndPlayer = remember {
         val vlcPath = tryConfigureVlc() ?: run {
@@ -305,10 +319,13 @@ fun PlayerScreen(
             val args = buildList {
                 add("--quiet")
                 add("--no-video-title-show")
-                add("--avcodec-threads=0")       // Auto multi-threaded CPU decoding fallback
-                add("--network-caching=5000")    // 5-second network buffer for high-bitrate 25GB 4K streams
-                add("--file-caching=5000")       // 5-second file buffer
+                add("--avcodec-threads=0")       // Auto multi-threaded CPU decoding
+                add("--network-caching=2500")    // Optimized 2.5s network buffer for fast stream start
+                add("--file-caching=2500")       // 2.5s file buffer
+                add("--live-caching=2500")
                 add("--http-reconnect")
+                add("--clock-jitter=0")
+                add("--clock-synchro=0")
                 add("--no-stats")
             }
             val factory = MediaPlayerFactory(*args.toTypedArray())
@@ -316,7 +333,7 @@ fun PlayerScreen(
 
             val bufferFmt = object : BufferFormatCallback {
                 override fun getBufferFormat(width: Int, height: Int): BufferFormat {
-                    // Cap max pixel buffer to 1920x1080 for 4K streams (prevents 2GB/s memory copy bottleneck)
+                    // Cap max pixel buffer to 1920x1080 for 4K streams (prevents memory copy bottleneck)
                     val targetW = if (width > 1920) 1920 else width
                     val targetH = if (width > 1920) (height * 1920) / width else height
                     return RV32BufferFormat(targetW, targetH)
@@ -338,9 +355,12 @@ fun PlayerScreen(
                         val ints = buffer.asIntBuffer()
                         val count = (fw * fh).coerceAtMost(ints.remaining())
                         if (count > 0) {
-                            val pixels = IntArray(count)
+                            val pixels = obtainPixelArray(count)
                             ints.get(pixels, 0, count)
-                            pendingRawFrame.set(RawFrameData(pixels, fw, fh))
+                            val oldFrame = pendingRawFrame.getAndSet(RawFrameData(pixels, fw, fh))
+                            if (oldFrame != null) {
+                                recyclePixelArray(oldFrame.pixels)
+                            }
                         }
                     } catch (_: Exception) {}
                 }
@@ -355,13 +375,31 @@ fun PlayerScreen(
                     javax.swing.SwingUtilities.invokeLater { vlcError = "VLC playback error — try External VLC" }
                 }
                 override fun buffering(mp: MediaPlayer, newCache: Float) {
-                    javax.swing.SwingUtilities.invokeLater { isBuffering = newCache < 100f }
+                    javax.swing.SwingUtilities.invokeLater {
+                        if (newCache >= 100f) {
+                            isBuffering = false
+                        } else if (!mp.status().isPlaying) {
+                            isBuffering = true
+                        }
+                    }
                 }
                 override fun playing(mp: MediaPlayer) {
-                    javax.swing.SwingUtilities.invokeLater { isBuffering = false }
+                    javax.swing.SwingUtilities.invokeLater {
+                        isBuffering = false
+                        isPlaying = true
+                        isVideoReady = true
+                    }
+                }
+                override fun paused(mp: MediaPlayer) {
+                    javax.swing.SwingUtilities.invokeLater {
+                        isPlaying = false
+                    }
                 }
                 override fun stopped(mp: MediaPlayer) {
-                    javax.swing.SwingUtilities.invokeLater { isVideoReady = false }
+                    javax.swing.SwingUtilities.invokeLater {
+                        isVideoReady = false
+                        isPlaying = false
+                    }
                 }
             })
 
@@ -374,29 +412,43 @@ fun PlayerScreen(
 
     val player = factoryAndPlayer?.second
 
-    // ── Smooth Server / Source Switching ──────────────────────────────────────
-    var isFirstPlay by remember { mutableStateOf(true) }
+    // ── Smooth Server / Source Switching with Seamless Position Resume ──────────
     LaunchedEffect(activeSource.url) {
         if (player != null) {
-            val savedPos = if (isFirstPlay) currentPosition else 0L
+            val savedPos = currentPosition // Preserves timestamp across source server switches
             vlcError = null
+            videoFrame = null
+            isVideoReady = false
             pendingRawFrame.set(null)
             isBuffering = true
+            isPlaying = true
 
             val safeUrl = toVlcMrl(activeSource.url)
             val opts = buildList {
                 activeSource.headers.forEach { (k, v) -> add(":http-header-$k=$v") }
-                add(":network-caching=3000"); add(":http-reconnect")
+                add(":network-caching=2500")
+                add(":http-reconnect=1")
+                add(":clock-jitter=0")
+                add(":clock-synchro=0")
             }.toTypedArray()
 
             try {
-                logVlc("Starting LibVLC with MRL: $safeUrl")
+                logVlc("Starting LibVLC MRL: $safeUrl (Resuming pos: ${savedPos}ms)")
                 player.media().play(safeUrl, *opts)
-                if (isFirstPlay && savedPos > 1000L) {
-                    delay(600)
-                    try { player.controls().setTime(savedPos) } catch (_: Exception) {}
+                if (savedPos > 1000L) {
+                    launch {
+                        for (attempt in 1..10) {
+                            delay(350)
+                            try {
+                                if (player.status().isPlaying || player.status().length() > 0) {
+                                    player.controls().setTime(savedPos)
+                                    currentPosition = savedPos
+                                    break
+                                }
+                            } catch (_: Exception) {}
+                        }
+                    }
                 }
-                isFirstPlay = false
             } catch (e: Exception) {
                 vlcError = "Failed to switch source: ${e.message}"
                 isBuffering = false
@@ -496,8 +548,14 @@ fun PlayerScreen(
     }
 
     fun togglePlayPause() {
-        isPlaying = !isPlaying
-        try { if (isPlaying) player?.controls()?.play() else player?.controls()?.pause() } catch (_: Exception) {}
+        if (player != null) {
+            val nextState = !isPlaying
+            isPlaying = nextState
+            try {
+                if (nextState) player.controls().play()
+                else player.controls().pause()
+            } catch (_: Exception) {}
+        }
     }
 
     fun setVolume(v: Int) {
@@ -568,12 +626,6 @@ fun PlayerScreen(
     ) {
         // Video bitmap or fallback/connecting states
         when {
-            videoFrame != null -> Image(
-                bitmap = videoFrame!!,
-                contentDescription = "Video",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = videoAspectMode.scale
-            )
             vlcError != null -> FallbackDashboard(
                 mediaUrl = activeSource.url, title = title, episodeName = episodeName,
                 errorMsg = vlcError!!, isCopied = isCopied,
@@ -581,13 +633,48 @@ fun PlayerScreen(
                 onLaunchVlc = { launchExternalVlc() },
                 onOpenBrowser = { try { Desktop.getDesktop().browse(URI(activeSource.url)) } catch (_: Exception) {} }
             )
-            else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            isExtractingNextEp -> Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFF0F0F12)),
+                contentAlignment = Alignment.Center
+            ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.height(16.dp))
-                    Text("Connecting to ${activeSource.name}…", color = Color.Gray)
+                    CircularProgressIndicator(
+                        color = MaterialTheme.colorScheme.primary,
+                        strokeWidth = 3.dp,
+                        modifier = Modifier.size(44.dp)
+                    )
+                    Spacer(Modifier.height(18.dp))
+                    Text("Fetching stream sources…", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                    Spacer(Modifier.height(6.dp))
+                    Text("Connecting to provider link", color = Color.White.copy(0.5f), fontSize = 12.sp)
                 }
             }
+            videoFrame == null || !isVideoReady -> Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFF0D0D10)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(
+                        color = MaterialTheme.colorScheme.primary,
+                        strokeWidth = 3.dp,
+                        modifier = Modifier.size(44.dp)
+                    )
+                    Spacer(Modifier.height(18.dp))
+                    Text("Connecting to ${activeSource.name}…", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                    Spacer(Modifier.height(6.dp))
+                    Text("Buffering initial stream segments", color = Color.White.copy(0.5f), fontSize = 12.sp)
+                }
+            }
+            else -> Image(
+                bitmap = videoFrame!!,
+                contentDescription = "Video",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = videoAspectMode.scale
+            )
         }
 
         // Seek indicator (centre flash)
@@ -641,7 +728,7 @@ fun PlayerScreen(
                     hasSources = activeSourcesList.size > 1,
                     hasAudioTracks = audioTracks.isNotEmpty(),
                     hasSubtitles = activeSubtitlesList.isNotEmpty() || nativeSubTracks.isNotEmpty(),
-                    hasVideo = videoFrame != null,
+                    hasVideo = videoFrame != null && isVideoReady && !isExtractingNextEp,
                     isFullscreen = isFullscreen,
                     onToggleFullscreen = onToggleFullscreen,
                     videoAspectMode = videoAspectMode,
