@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -61,25 +62,7 @@ fun DesktopSidebar(
             },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(Modifier.height(16.dp))
-
-        // App Logo
-        Surface(
-            shape = RoundedCornerShape(8.dp),
-            color = SurfaceCard,
-            border = BorderStroke(1.dp, BorderSubtle),
-            modifier = Modifier.size(36.dp)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Image(
-                    painter = painterResource("icon.png"),
-                    contentDescription = "CloudStream Logo",
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-        }
-
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(12.dp))
 
         // Top Navigation Items
         Column(
@@ -123,17 +106,19 @@ private fun Win11NavItem(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val hovered by interactionSource.collectIsHoveredAsState()
+    val focused by interactionSource.collectIsFocusedAsState()
+    val isHighlighted = hovered || focused
 
     val iconColor by animateColorAsState(
-        if (isSelected) TextPrimary else if (hovered) TextSecondary else TextTertiary,
+        if (isSelected) TextPrimary else if (isHighlighted) TextSecondary else TextTertiary,
         animationSpec = tween(150)
     )
     val bgColor by animateColorAsState(
-        if (isSelected) AccentBlue.copy(alpha = 0.12f) else if (hovered) SurfaceHover else Color.Transparent,
+        if (isSelected) AccentBlue.copy(alpha = 0.12f) else if (isHighlighted) SurfaceHover else Color.Transparent,
         animationSpec = tween(150)
     )
     val indicatorColor by animateColorAsState(
-        if (isSelected) AccentBlue else Color.Transparent,
+        if (isSelected) AccentBlue else if (focused) AccentBlue.copy(alpha = 0.6f) else Color.Transparent,
         animationSpec = tween(200)
     )
 
@@ -143,7 +128,13 @@ private fun Win11NavItem(
             .height(52.dp)
             .clip(RoundedCornerShape(6.dp))
             .background(bgColor)
+            .border(
+                width = if (focused) 1.5.dp else 0.dp,
+                color = if (focused) AccentBlue else Color.Transparent,
+                shape = RoundedCornerShape(6.dp)
+            )
             .hoverable(interactionSource)
+            .focusable(interactionSource = interactionSource)
             .clickable(
                 indication = null,
                 interactionSource = interactionSource,

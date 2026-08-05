@@ -1,0 +1,38 @@
+name: Build Windows Desktop App
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew || true
+        shell: bash
+
+      - name: Compile Kotlin JVM
+        run: .\gradlew.bat compileKotlinJvm --no-daemon
+
+      - name: Build MSI Installer Package
+        run: .\gradlew.bat packageMsi --no-daemon
+
+      - name: Upload MSI Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CloudStream-Desktop-Installer
+          path: build/compose/binaries/main/msi/*.msi

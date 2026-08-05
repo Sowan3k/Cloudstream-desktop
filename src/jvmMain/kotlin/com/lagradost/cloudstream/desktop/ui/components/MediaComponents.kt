@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,7 +32,64 @@ import com.lagradost.cloudstream.desktop.storage.WatchProgress
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.TvType
 import kotlinx.coroutines.delay
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import java.util.Locale
+
+// ─── Reusable Horizontal Mouse Scroll Extensions ──────────────────────────────
+
+@OptIn(ExperimentalComposeUiApi::class)
+fun Modifier.onHorizontalMouseScroll(
+    lazyListState: androidx.compose.foundation.lazy.LazyListState,
+    scrollFactor: Float = 45f
+): Modifier = this.pointerInput(lazyListState) {
+    awaitPointerEventScope {
+        while (true) {
+            val event = awaitPointerEvent()
+            if (event.type == PointerEventType.Scroll) {
+                val change = event.changes.firstOrNull()
+                if (change != null && !change.isConsumed) {
+                    val delta = if (change.scrollDelta.y != 0f) change.scrollDelta.y else change.scrollDelta.x
+                    if (delta != 0f) {
+                        val scrollAmount = delta * scrollFactor
+                        val canScroll = if (scrollAmount > 0f) lazyListState.canScrollForward else lazyListState.canScrollBackward
+                        if (canScroll) {
+                            lazyListState.dispatchRawDelta(scrollAmount)
+                            change.consume()
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+fun Modifier.onHorizontalMouseScroll(
+    scrollState: ScrollState,
+    scrollFactor: Float = 45f
+): Modifier = this.pointerInput(scrollState) {
+    awaitPointerEventScope {
+        while (true) {
+            val event = awaitPointerEvent()
+            if (event.type == PointerEventType.Scroll) {
+                val change = event.changes.firstOrNull()
+                if (change != null && !change.isConsumed) {
+                    val delta = if (change.scrollDelta.y != 0f) change.scrollDelta.y else change.scrollDelta.x
+                    if (delta != 0f) {
+                        val scrollAmount = delta * scrollFactor
+                        val canScroll = if (scrollAmount > 0f) scrollState.canScrollForward else scrollState.canScrollBackward
+                        if (canScroll) {
+                            scrollState.dispatchRawDelta(scrollAmount)
+                            change.consume()
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 // ─── Shared Media Card (poster + title) ──────────────────────────────────────
 
@@ -46,8 +104,10 @@ fun MediaCard(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val hovered by interactionSource.collectIsHoveredAsState()
+    val focused by interactionSource.collectIsFocusedAsState()
+    val isHighlighted = hovered || focused
     val scale by animateFloatAsState(
-        targetValue = if (hovered) 1.02f else 1f,
+        targetValue = if (isHighlighted) 1.03f else 1f,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
     )
 
@@ -79,7 +139,12 @@ fun MediaCard(
             .width(width)
             .scale(scale)
             .hoverable(interactionSource)
-            .clickable { onClick() },
+            .focusable(interactionSource = interactionSource)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Surface(
@@ -88,7 +153,10 @@ fun MediaCard(
                 .height(height),
             shape = RoundedCornerShape(8.dp),
             color = Color(0xFF2C2C2C),
-            border = BorderStroke(1.dp, if (hovered) Color(0x26FFFFFF) else Color(0x18FFFFFF))
+            border = BorderStroke(
+                width = if (isHighlighted) 2.dp else 1.dp,
+                color = if (focused) Color(0xFF0078D4) else if (hovered) Color(0x66FFFFFF) else Color(0x18FFFFFF)
+            )
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 // Poster image
@@ -556,9 +624,7 @@ fun HomeLoadingShimmer(modifier: Modifier = Modifier) {
 @Composable
 fun TopLeftQualityBadge(item: SearchResponse, modifier: Modifier = Modifier) {
     val qualityText = remember(item) {
-        val q = item.quality?.name
-        if (q != null) q
-        else {
+        val raw = item.quality?.name ?: run {
             val name = item.name
             when {
                 name.contains("4K", ignoreCase = true) || name.contains("2160p", ignoreCase = true) -> "4K"
@@ -568,6 +634,13 @@ fun TopLeftQualityBadge(item: SearchResponse, modifier: Modifier = Modifier) {
                 item.type == TvType.Movie || item.type == TvType.AnimeMovie -> "HD"
                 else -> null
             }
+        }
+        when (raw?.uppercase()) {
+            "FOURK", "4K", "UHD", "2160P" -> "4K"
+            "FHD", "1080P" -> "1080p"
+            "HD", "720P" -> "HD"
+            "SD", "480P", "360P" -> "SD"
+            else -> raw
         }
     }
 
@@ -581,14 +654,17 @@ fun TopLeftQualityBadge(item: SearchResponse, modifier: Modifier = Modifier) {
         Box(
             modifier = modifier
                 .padding(6.dp)
+                .height(18.dp)
                 .clip(RoundedCornerShape(4.dp))
                 .background(bg)
                 .border(0.5.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(4.dp))
-                .padding(horizontal = 5.dp, vertical = 2.dp)
+                .padding(horizontal = 5.dp),
+            contentAlignment = Alignment.Center
         ) {
             Text(
                 text = qualityText,
-                fontSize = 9.sp,
+                fontSize = 9.5.sp,
+                lineHeight = 9.5.sp,
                 fontWeight = FontWeight.Bold,
                 color = textColor,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -615,13 +691,16 @@ fun TopRightAudioBadge(item: SearchResponse, modifier: Modifier = Modifier) {
                     val label = if (dubEp != null && dubEp > 0) "DUB $dubEp" else "DUB"
                     Box(
                         modifier = Modifier
+                            .height(18.dp)
                             .clip(RoundedCornerShape(4.dp))
                             .background(Color.White)
-                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                            .padding(horizontal = 5.dp),
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = label,
-                            fontSize = 9.sp,
+                            fontSize = 9.5.sp,
+                            lineHeight = 9.5.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color.Black,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -633,14 +712,17 @@ fun TopRightAudioBadge(item: SearchResponse, modifier: Modifier = Modifier) {
                     val label = if (subEp != null && subEp > 0) "SUB $subEp" else "SUB"
                     Box(
                         modifier = Modifier
+                            .height(18.dp)
                             .clip(RoundedCornerShape(4.dp))
                             .background(Color.Black.copy(0.75f))
                             .border(0.5.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(4.dp))
-                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                            .padding(horizontal = 5.dp),
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = label,
-                            fontSize = 9.sp,
+                            fontSize = 9.5.sp,
+                            lineHeight = 9.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -655,13 +737,16 @@ fun TopRightAudioBadge(item: SearchResponse, modifier: Modifier = Modifier) {
                 if (isDub) {
                     Box(
                         modifier = Modifier
+                            .height(18.dp)
                             .clip(RoundedCornerShape(4.dp))
                             .background(Color.White)
-                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                            .padding(horizontal = 5.dp),
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = "DUB",
-                            fontSize = 9.sp,
+                            fontSize = 9.5.sp,
+                            lineHeight = 9.5.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color.Black,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -671,14 +756,17 @@ fun TopRightAudioBadge(item: SearchResponse, modifier: Modifier = Modifier) {
                 if (ep != null && ep > 0) {
                     Box(
                         modifier = Modifier
+                            .height(18.dp)
                             .clip(RoundedCornerShape(4.dp))
                             .background(Color.Black.copy(0.75f))
                             .border(0.5.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(4.dp))
-                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                            .padding(horizontal = 5.dp),
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = "EP $ep",
-                            fontSize = 9.sp,
+                            fontSize = 9.5.sp,
+                            lineHeight = 9.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -696,13 +784,16 @@ fun TopRightAudioBadge(item: SearchResponse, modifier: Modifier = Modifier) {
                 if (isDub) {
                     Box(
                         modifier = Modifier
+                            .height(18.dp)
                             .clip(RoundedCornerShape(4.dp))
                             .background(Color.White)
-                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                            .padding(horizontal = 5.dp),
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = "DUB",
-                            fontSize = 9.sp,
+                            fontSize = 9.5.sp,
+                            lineHeight = 9.5.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color.Black,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center

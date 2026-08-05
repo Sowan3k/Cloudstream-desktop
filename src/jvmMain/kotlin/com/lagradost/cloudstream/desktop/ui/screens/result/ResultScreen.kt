@@ -8,6 +8,7 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import com.lagradost.cloudstream.desktop.ui.components.onHorizontalMouseScroll
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -26,6 +27,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -74,6 +79,7 @@ fun ResultScreen(
     var extractedLinks by remember { mutableStateOf<List<ExtractorLink>>(emptyList()) }
     var subtitleTracks by remember { mutableStateOf<List<SubtitleTrackInfo>>(emptyList()) }
     var showQualityPicker by remember { mutableStateOf(false) }
+    var selectedDubStatus by remember { mutableStateOf<DubStatus?>(null) }
     var selectedSeason by remember { mutableStateOf<Int?>(null) }
     var extractingEpisode by remember { mutableStateOf<Episode?>(null) }
     var hasAutoPlayed by remember { mutableStateOf(false) }
@@ -88,6 +94,8 @@ fun ResultScreen(
             isExtractingLinks = true
             val links = mutableListOf<ExtractorLink>()
             val subs = mutableListOf<SubtitleTrackInfo>()
+            var hasNavigated = false
+
             fun isAudioOnly(link: ExtractorLink?): Boolean {
                 if (link == null) return false
                 val url = link.url ?: return false
@@ -98,6 +106,45 @@ fun ResultScreen(
                 if (uLower.endsWith(".m4a") || uLower.endsWith(".aac") || uLower.endsWith(".mp3") || uLower.endsWith(".mka") || uLower.endsWith(".wav") || uLower.endsWith(".flac")) return true
                 if (uLower.contains(".audio.") || uLower.contains("/audio.")) return true
                 return false
+            }
+
+            fun rankLink(link: ExtractorLink?): Int {
+                if (link == null) return -999999
+                val url = link.url ?: return -999999
+                var score = link.quality * 100
+                val urlLower = url.lowercase().trimEnd('/')
+                val nameLower = (link.name ?: "").lowercase()
+                if (isAudioOnly(link)) score -= 100000
+                if (urlLower.endsWith(".mkv") || urlLower.endsWith(".mp4") || urlLower.endsWith(".m3u8") || urlLower.endsWith(".avi")) score += 10000
+                if (nameLower.contains("gb") || nameLower.contains("mb")) score += 5000
+                score += urlLower.split("/").size * 1000
+                return score
+            }
+
+            fun buildPlayerScreen(sortedLinks: List<ExtractorLink>): DesktopScreen.Player {
+                val bestLink = sortedLinks.first()
+                return DesktopScreen.Player(
+                    mediaUrl = bestLink.url,
+                    title = currentResponse.name,
+                    episodeName = episode?.let { ep ->
+                        val code = "S${ep.season ?: 1}E${ep.episode ?: 1}"
+                        val name = ep.name
+                        if (!name.isNullOrBlank() && !name.contains(code, ignoreCase = true)) {
+                            "$code — $name"
+                        } else if (!name.isNullOrBlank()) {
+                            name
+                        } else {
+                            code
+                        }
+                    },
+                    posterUrl = currentResponse.posterUrl,
+                    headers = bestLink.getAllHeaders(),
+                    subtitles = subs,
+                    sources = sortedLinks.map { com.lagradost.cloudstream.desktop.ui.navigation.StreamSourceInfo(name = it.name ?: "Server", url = it.url, quality = it.quality, headers = it.getAllHeaders()) },
+                    loadResponse = currentResponse,
+                    currentEpisode = episode,
+                    apiName = api.name
+                )
             }
 
             try {
@@ -117,7 +164,21 @@ fun ResultScreen(
                                 },
                                 callback = { link ->
                                     if (link != null && !link.url.isNullOrBlank()) {
-                                        links.add(link)
+                                        if (!isAudioOnly(link)) {
+                                            links.add(link)
+                                            val valid = links.filterNot { isAudioOnly(it) }
+                                            val sorted = valid.sortedByDescending { rankLink(it) }
+                                            if (sorted.isNotEmpty()) {
+                                                extractedLinks = sorted
+                                                subtitleTracks = subs
+                                                if (!hasNavigated) {
+                                                    hasNavigated = true
+                                                    onNavigate(buildPlayerScreen(sorted), autoPlay)
+                                                } else {
+                                                    onNavigate(buildPlayerScreen(sorted), true)
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             )
@@ -125,85 +186,20 @@ fun ResultScreen(
                     }
                 }
 
-                fun rankLink(link: ExtractorLink?): Int {
-                    if (link == null) return -999999
-                    val url = link.url ?: return -999999
-                    var score = link.quality * 100
-                    val urlLower = url.lowercase().trimEnd('/')
-                    val nameLower = (link.name ?: "").lowercase()
-
-                    if (isAudioOnly(link)) score -= 100000
-
-                    if (urlLower.endsWith(".mkv") || urlLower.endsWith(".mp4") || urlLower.endsWith(".m3u8") || urlLower.endsWith(".avi")) score += 10000
-                    if (nameLower.contains("gb") || nameLower.contains("mb")) score += 5000
-                    val segments = urlLower.split("/").size
-                    score += segments * 1000
-                    return score
-                }
-
-                val nonNullLinks = links.filterNotNull().filter { !it.url.isNullOrBlank() }
-                val videoOnlyLinks = nonNullLinks.filterNot { isAudioOnly(it) }
-                val validLinks = videoOnlyLinks.ifEmpty { nonNullLinks }
-                val sortedLinks = validLinks.sortedByDescending { rankLink(it) }
-                extractedLinks = sortedLinks
-                subtitleTracks = subs
-
-                if (sortedLinks.isNotEmpty()) {
-                    val bestLink = sortedLinks.first()
-                    onNavigate(
-                        DesktopScreen.Player(
-                            mediaUrl = bestLink.url,
-                            title = currentResponse.name,
-                            episodeName = episode?.let { ep ->
-                                val code = "S${ep.season ?: 1}E${ep.episode ?: 1}"
-                                val name = ep.name
-                                if (!name.isNullOrBlank() && !name.contains(code, ignoreCase = true)) {
-                                    "$code — $name"
-                                } else if (!name.isNullOrBlank()) {
-                                    name
-                                } else {
-                                    code
-                                }
-                            },
-                            posterUrl = currentResponse.posterUrl,
-                            headers = bestLink.headers,
-                            subtitles = subs,
-                            sources = sortedLinks.map { com.lagradost.cloudstream.desktop.ui.navigation.StreamSourceInfo(name = it.name ?: "Server", url = it.url, quality = it.quality, headers = it.headers) },
-                            loadResponse = currentResponse,
-                            currentEpisode = episode,
-                            apiName = api.name
-                        ),
-                        autoPlay
-                    )
-                } else {
+                if (!hasNavigated) {
                     errorMessage = "No playable links found for this title."
                 }
             } catch (e: Exception) {
                 val nonNullLinks = links.filterNotNull().filter { !it.url.isNullOrBlank() }
-                if (nonNullLinks.isNotEmpty()) {
+                if (nonNullLinks.isNotEmpty() && !hasNavigated) {
                     val videoOnlyLinks = nonNullLinks.filterNot { isAudioOnly(it) }
                     val sortedLinks = videoOnlyLinks.ifEmpty { nonNullLinks }
                     if (sortedLinks.isNotEmpty()) {
-                        val bestLink = sortedLinks.first()
-                        onNavigate(
-                            DesktopScreen.Player(
-                                mediaUrl = bestLink.url,
-                                title = currentResponse.name,
-                                episodeName = episode?.let { ep -> "S${ep.season ?: 1}E${ep.episode ?: 1}" },
-                                posterUrl = currentResponse.posterUrl,
-                                headers = bestLink.headers,
-                                subtitles = subs,
-                                sources = sortedLinks.map { com.lagradost.cloudstream.desktop.ui.navigation.StreamSourceInfo(name = it.name ?: "Server", url = it.url, quality = it.quality, headers = it.headers) },
-                                loadResponse = currentResponse,
-                                currentEpisode = episode,
-                                apiName = api.name
-                            ),
-                            autoPlay
-                        )
+                        onNavigate(buildPlayerScreen(sortedLinks), autoPlay)
                     } else {
                         errorMessage = "Extraction failed: ${e.localizedMessage}"
                     }
-                } else {
+                } else if (!hasNavigated) {
                     errorMessage = "Extraction failed: ${e.localizedMessage}"
                 }
             } finally {
@@ -236,27 +232,50 @@ fun ResultScreen(
                 loadResponse = res
                 if (res is TvSeriesLoadResponse) {
                     selectedSeason = res.episodes.mapNotNull { it.season }.minOrNull()
+                } else if (res is AnimeLoadResponse) {
+                    val availableDub = res.episodes.filterValues { it.isNotEmpty() }.keys
+                    val initialDub = availableDub.firstOrNull { it == DubStatus.Subbed }
+                        ?: availableDub.firstOrNull { it == DubStatus.Dubbed }
+                        ?: availableDub.firstOrNull()
+                    selectedDubStatus = initialDub
+                    val currentEps = res.episodes[initialDub] ?: emptyList()
+                    selectedSeason = currentEps.mapNotNull { it.season }.minOrNull()
                 }
                 if (autoPlay && !hasAutoPlayed) {
                     hasAutoPlayed = true
-                    val epToPlay = if (res is TvSeriesLoadResponse && res.episodes.isNotEmpty()) {
-                        val historyMatch = DesktopDataStore.currentSettings.watchHistory.firstOrNull { it.url == url }
-                        if (historyMatch != null) {
-                            val sNum = historyMatch.seasonIndex ?: Regex("""S(\d+)E(\d+)""", RegexOption.IGNORE_CASE)
-                                .find(historyMatch.title)?.groupValues?.get(1)?.toIntOrNull()
-                            val eNum = historyMatch.episodeIndex ?: Regex("""S(\d+)E(\d+)""", RegexOption.IGNORE_CASE)
-                                .find(historyMatch.title)?.groupValues?.get(2)?.toIntOrNull()
+                    val epToPlay = when (res) {
+                        is TvSeriesLoadResponse -> {
+                            if (res.episodes.isNotEmpty()) {
+                                val historyMatch = DesktopDataStore.currentSettings.watchHistory.firstOrNull { it.url == url }
+                                if (historyMatch != null) {
+                                    val sNum = historyMatch.seasonIndex ?: Regex("""S(\d+)E(\d+)""", RegexOption.IGNORE_CASE)
+                                        .find(historyMatch.title)?.groupValues?.get(1)?.toIntOrNull()
+                                    val eNum = historyMatch.episodeIndex ?: Regex("""S(\d+)E(\d+)""", RegexOption.IGNORE_CASE)
+                                        .find(historyMatch.title)?.groupValues?.get(2)?.toIntOrNull()
 
-                            if (sNum != null && eNum != null) {
-                                res.episodes.firstOrNull { ep -> ep.season == sNum && ep.episode == eNum }
-                            } else if (eNum != null) {
-                                res.episodes.firstOrNull { ep -> ep.episode == eNum }
+                                    (if (sNum != null && eNum != null) {
+                                        res.episodes.firstOrNull { ep -> ep.season == sNum && ep.episode == eNum }
+                                    } else if (eNum != null) {
+                                        res.episodes.firstOrNull { ep -> ep.episode == eNum }
+                                    } else null) ?: res.episodes.first()
+                                } else {
+                                    res.episodes.first()
+                                }
                             } else null
-                            ?: res.episodes.first()
-                        } else {
-                            res.episodes.first()
                         }
-                    } else null
+                        is AnimeLoadResponse -> {
+                            val currentEps = res.episodes[selectedDubStatus] ?: res.episodes.values.flatten()
+                            if (currentEps.isNotEmpty()) {
+                                val historyMatch = DesktopDataStore.currentSettings.watchHistory.firstOrNull { it.url == url }
+                                if (historyMatch != null) {
+                                    val eNum = historyMatch.episodeIndex
+                                    if (eNum != null) currentEps.firstOrNull { ep -> ep.episode == eNum } ?: currentEps.first()
+                                    else currentEps.first()
+                                } else currentEps.first()
+                            } else null
+                        }
+                        else -> null
+                    }
                     extractAndPlay(episode = epToPlay, targetResponse = res)
                 }
             } else {
@@ -269,7 +288,37 @@ fun ResultScreen(
         }
     }
 
-    Box(modifier = modifier.fillMaxSize().background(SurfaceBase)) {
+    val resultFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        resultFocusRequester.requestFocus()
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(SurfaceBase)
+            .focusRequester(resultFocusRequester)
+            .focusable()
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown) {
+                    when (event.key) {
+                        Key.Escape, Key.Backspace -> {
+                            onBack()
+                            true
+                        }
+                        Key.Spacebar, Key.Enter -> {
+                            val res = loadResponse
+                            if (res != null && res !is TvSeriesLoadResponse && res !is AnimeLoadResponse) {
+                                extractAndPlay(null)
+                                true
+                            } else false
+                        }
+                        else -> false
+                    }
+                } else false
+            }
+    ) {
         when {
             autoPlay && (isLoading || isExtractingLinks) -> Win11ResumingState()
             isLoading -> Win11LoadingState()
@@ -572,6 +621,110 @@ fun ResultScreen(
                         }
                     }
 
+                    // ── ANIME EPISODES ────────────────────────────────────────
+                    if (res is AnimeLoadResponse) {
+                        val dubStatuses = res.episodes.filterValues { it.isNotEmpty() }.keys.toList()
+
+                        if (dubStatuses.isNotEmpty()) {
+                            item {
+                                LazyRow(
+                                    contentPadding = PaddingValues(horizontal = 28.dp, vertical = 12.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    items(dubStatuses) { dubStatus ->
+                                        val count = res.episodes[dubStatus]?.size ?: 0
+                                        val isSelected = selectedDubStatus == dubStatus
+                                        val label = when (dubStatus) {
+                                            DubStatus.Subbed -> "Subbed"
+                                            DubStatus.Dubbed -> "Dubbed"
+                                            DubStatus.None -> "Raw"
+                                        } + " ($count)"
+                                        val textColor by animateColorAsState(if (isSelected) TextPrimary else TextTertiary, tween(150))
+
+                                        Surface(
+                                            onClick = {
+                                                selectedDubStatus = dubStatus
+                                                val newEps = res.episodes[dubStatus] ?: emptyList()
+                                                selectedSeason = newEps.mapNotNull { it.season }.minOrNull()
+                                            },
+                                            shape = RoundedCornerShape(5.dp),
+                                            color = if (isSelected) AccentBlue.copy(0.12f) else Color.Transparent,
+                                            border = BorderStroke(1.dp, if (isSelected) AccentBlue.copy(0.5f) else BorderSubtle)
+                                        ) {
+                                            Text(
+                                                label,
+                                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                                                color = textColor,
+                                                fontSize = 12.sp,
+                                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        val currentAnimeEpisodes = res.episodes[selectedDubStatus]
+                            ?: res.episodes.values.flatten()
+
+                        val seasons = currentAnimeEpisodes.mapNotNull { it.season }.distinct().sorted()
+
+                        if (seasons.size > 1) {
+                            item {
+                                LazyRow(
+                                    contentPadding = PaddingValues(horizontal = 28.dp, vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    items(seasons) { season ->
+                                        val isSelected = selectedSeason == season
+                                        val textColor by animateColorAsState(if (isSelected) TextPrimary else TextTertiary, tween(150))
+
+                                        Surface(
+                                            onClick = { selectedSeason = season },
+                                            shape = RoundedCornerShape(5.dp),
+                                            color = if (isSelected) AccentBlue.copy(0.12f) else Color.Transparent,
+                                            border = BorderStroke(1.dp, if (isSelected) AccentBlue.copy(0.5f) else BorderSubtle)
+                                        ) {
+                                            Text(
+                                                "Season $season",
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                                                color = textColor,
+                                                fontSize = 12.sp,
+                                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            item { Spacer(Modifier.height(12.dp)) }
+                        }
+
+                        val filteredEpisodes = if (selectedSeason != null && seasons.size > 1)
+                            currentAnimeEpisodes.filter { it.season == selectedSeason || (it.season == null && selectedSeason == 1) }
+                        else currentAnimeEpisodes
+
+                        item {
+                            Text(
+                                text = "Episodes (${filteredEpisodes.size})",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimary,
+                                modifier = Modifier.padding(horizontal = 28.dp, vertical = 6.dp)
+                            )
+                        }
+
+                        itemsIndexed(filteredEpisodes) { index, ep ->
+                            Win11EpisodeRow(
+                                episode = ep,
+                                index = index,
+                                isExtracting = isExtractingLinks && extractingEpisode == ep,
+                                onClick = { extractAndPlay(ep) },
+                                modifier = Modifier.padding(horizontal = 28.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
                     // ── SYNOPSIS ─────────────────────────────────────────────
                     res.plot?.let { plot ->
                         item {
@@ -590,7 +743,9 @@ fun ResultScreen(
                             Column(modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp)) {
                                 Text("Cast", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
                                 Spacer(Modifier.height(12.dp))
-                                LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
                                     items(actors.take(12)) { actorData ->
                                         Win11ActorCard(actorData)
                                     }
@@ -606,7 +761,9 @@ fun ResultScreen(
                             Column(modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp)) {
                                 Text("More Like This", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
                                 Spacer(Modifier.height(12.dp))
-                                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
                                     items(recommendations.take(10)) { rec ->
                                         MediaCard(
                                             item = rec,

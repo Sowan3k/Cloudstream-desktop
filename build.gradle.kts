@@ -1,4 +1,8 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
+import java.lang.Short.reverseBytes as revShort
+import java.lang.Integer.reverseBytes as revInt
 
 plugins {
     kotlin("multiplatform") version "2.4.0"
@@ -74,17 +78,22 @@ compose.desktop {
 
         nativeDistributions {
             targetFormats(TargetFormat.Msi, TargetFormat.Exe)
-            packageName = "CloudStreamDesktop"
+            packageName = "CloudStream Desktop"
             packageVersion = "1.0.3"
+            vendor = "CloudStream Team"
+            description = "CloudStream Windows Desktop Application — High Performance Movies, TV Series & Anime Streamer"
+            copyright = "© 2026 CloudStream Team"
+
             // vlcj/JNA callbacks rely on JDK modules beyond Compose Desktop's
             // minimal runtime image. Keep the complete runtime in the MSI so
             // the packaged app has the same capabilities as `gradlew run`.
             includeAllModules = true
-            description = "CloudStream Windows Desktop Application"
-            copyright = "© 2026 Openstream / CloudStream Team"
 
             windows {
+                iconFile.set(project.file("src/jvmMain/resources/icon.ico"))
                 menuGroup = "CloudStream"
+                menu = true
+                shortcut = true
                 upgradeUuid = "a2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e"
                 dirChooser = true
                 perUserInstall = false
@@ -93,4 +102,35 @@ compose.desktop {
 
         jvmArgs("--add-opens=java.base/java.lang=ALL-UNNAMED")
     }
+}
+
+tasks.register("generateIco") {
+    doLast {
+        val pngFile = file("src/jvmMain/resources/icon.png")
+        val icoFile = file("src/jvmMain/resources/icon.ico")
+        val pngBytes = pngFile.readBytes()
+        val bos = ByteArrayOutputStream()
+        val dos = DataOutputStream(bos)
+        // ICONDIR header
+        dos.writeShort(revShort(0.toShort()).toInt()) // Reserved
+        dos.writeShort(revShort(1.toShort()).toInt()) // Type 1 = ICO
+        dos.writeShort(revShort(1.toShort()).toInt()) // Count = 1
+        // ICONDIRENTRY header
+        dos.writeByte(0) // Width 256
+        dos.writeByte(0) // Height 256
+        dos.writeByte(0) // Color count
+        dos.writeByte(0) // Reserved
+        dos.writeShort(revShort(1.toShort()).toInt()) // Planes = 1
+        dos.writeShort(revShort(32.toShort()).toInt()) // Bit count = 32
+        dos.writeInt(revInt(pngBytes.size)) // Bytes in resource
+        dos.writeInt(revInt(22)) // Offset = 22
+        dos.write(pngBytes)
+        dos.flush()
+        icoFile.writeBytes(bos.toByteArray())
+        println("Generated valid Win32 ICO file (${icoFile.length()} bytes)")
+    }
+}
+
+tasks.matching { it.name.startsWith("package") || it.name.startsWith("create") }.configureEach {
+    dependsOn("generateIco")
 }

@@ -90,7 +90,17 @@ object DesktopPluginLoader {
                 com.cncverse.MovieBoxProviderIN()
             )
             registerBuiltInApis(providers)
-            log("Registered ${providers.size} native BDIX providers successfully!")
+
+            // Register native custom extractors for Anime and movies
+            try {
+                com.lagradost.cloudstream3.utils.extractorApis.add(com.aniwatch.MegaPlay())
+                com.lagradost.cloudstream3.utils.extractorApis.add(com.allwish.MegaPlay())
+                com.lagradost.cloudstream3.utils.extractorApis.add(com.allwish.Zen())
+                com.lagradost.cloudstream3.utils.extractorApis.add(com.allwish.Vidwish())
+                com.lagradost.cloudstream3.utils.extractorApis.add(com.nehal.vegamovies.VCloud())
+            } catch (_: Throwable) {}
+
+            log("Registered ${providers.size} native BDIX providers & extractors successfully!")
         } catch (e: Throwable) {
             log("Error registering native BDIX providers: ${e.stackTraceToString()}")
         }

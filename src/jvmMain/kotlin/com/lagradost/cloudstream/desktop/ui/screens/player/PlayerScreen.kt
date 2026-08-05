@@ -27,6 +27,11 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -164,8 +169,16 @@ fun PlayerScreen(
     var activeEpisodeName by remember {
         mutableStateOf(episodeName ?: currentEpisode?.let { "S${it.season}E${it.episode}" })
     }
-    val filteredSources = sources.filterNot { isAudioOnlySource(it) }.ifEmpty { sources }
+    val filteredSources = remember(sources) {
+        sources.filterNot { isAudioOnlySource(it) }.ifEmpty { sources }
+    }
     var activeSourcesList by remember { mutableStateOf(filteredSources) }
+
+    LaunchedEffect(filteredSources) {
+        if (filteredSources.isNotEmpty()) {
+            activeSourcesList = filteredSources
+        }
+    }
     var activeSubtitlesList by remember { mutableStateOf(subtitles) }
     var isExtractingNextEp by remember { mutableStateOf(false) }
     var showEpisodesPicker by remember { mutableStateOf(false) }
@@ -438,7 +451,17 @@ fun PlayerScreen(
             player.events().addMediaPlayerEventListener(object : uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter() {
                 override fun error(mp: MediaPlayer) {
                     logVlc("LibVLC error while playing: ${toVlcMrl(activeSource.url)}")
-                    javax.swing.SwingUtilities.invokeLater { vlcError = "VLC playback error — try External VLC" }
+                    javax.swing.SwingUtilities.invokeLater {
+                        // 🔄 Auto-Failover: try next backup server automatically
+                        val currentIdx = sources.indexOf(activeSource)
+                        val nextSource = sources.getOrNull(currentIdx + 1)
+                        if (nextSource != null) {
+                            logVlc("Auto-failover to next server: ${nextSource.name}")
+                            activeSource = nextSource
+                        } else {
+                            vlcError = "VLC playback error — all servers failed"
+                        }
+                    }
                 }
                 override fun buffering(mp: MediaPlayer, newCache: Float) {
                     javax.swing.SwingUtilities.invokeLater {
@@ -490,15 +513,19 @@ fun PlayerScreen(
             isPlaying = true
 
             val rawUrl = activeSource.url
-            val hasHeaders = activeSource.headers.isNotEmpty()
-            val playUrl = if (hasHeaders || rawUrl.contains(".mpd", ignoreCase = true) || rawUrl.contains("hakunaymatata", ignoreCase = true)) {
-                com.lagradost.cloudstream.desktop.utils.DesktopStreamProxy.getProxiedUrl(rawUrl, activeSource.headers)
+            val headers = activeSource.headers
+
+            // Streams with headers (like Referer/User-Agent/Cookies), DASH (.mpd), or special streams
+            // MUST route through DesktopStreamProxy so every sub-segment (.ts/.m4s) carries the required headers.
+            val needsProxy = headers.isNotEmpty() || rawUrl.contains(".mpd", ignoreCase = true) || rawUrl.contains(".m3u8", ignoreCase = true) || rawUrl.contains("hakunaymatata", ignoreCase = true)
+            val playUrl = if (needsProxy) {
+                com.lagradost.cloudstream.desktop.utils.DesktopStreamProxy.getProxiedUrl(rawUrl, headers)
             } else {
                 toVlcMrl(rawUrl)
             }
 
             val opts = buildList {
-                activeSource.headers.forEach { (k, v) ->
+                headers.forEach { (k, v) ->
                     val keyLower = k.lowercase()
                     when {
                         keyLower == "referer" -> {
@@ -513,16 +540,19 @@ fun PlayerScreen(
                             add(":http-cookie=$v")
                             add(":http-header=Cookie: $v")
                         }
+                        // Skip hop-by-hop headers VLC doesn't understand
+                        keyLower == "connection" || keyLower == "pragma" ||
+                        keyLower == "cache-control" || keyLower == "accept-encoding" -> { /* skip */ }
                         else -> add(":http-header=$k: $v")
                     }
                 }
                 add(":network-caching=3000")
-                add(":file-caching=3000")
+                add(":file-caching=1000")
                 add(":live-caching=3000")
                 add(":http-reconnect=1")
                 add(":clock-jitter=0")
                 add(":clock-synchro=0")
-                if (playUrl.contains(".mpd", ignoreCase = true) || rawUrl.contains(".mpd", ignoreCase = true)) {
+                if (rawUrl.contains(".mpd", ignoreCase = true) || playUrl.contains(".mpd", ignoreCase = true)) {
                     add(":demux=adaptive")
                 }
             }.toTypedArray()
@@ -605,11 +635,19 @@ fun PlayerScreen(
         }
     }
 
-    // 20-second timeout
+    // 30-second timeout with auto-failover to next backup server
     LaunchedEffect(activeSource.url) {
-        delay(20_000)
+        delay(30_000)
         if (!isVideoReady && vlcError == null) {
-            vlcError = "Stream timed out — server may be slow or URL unavailable"
+            // 🔄 Auto-Failover on timeout: try the next source before showing error
+            val currentIdx = sources.indexOf(activeSource)
+            val nextSource = sources.getOrNull(currentIdx + 1)
+            if (nextSource != null) {
+                logVlc("Timeout auto-failover to: ${nextSource.name}")
+                activeSource = nextSource
+            } else {
+                vlcError = "Stream timed out — server may be slow or URL unavailable"
+            }
         }
     }
 
@@ -716,22 +754,39 @@ fun PlayerScreen(
         } catch (_: Exception) { try { Desktop.getDesktop().browse(URI(activeSource.url)) } catch (_: Exception) {} }
     }
 
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
     // ── Render ────────────────────────────────────────────────────────────────
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
+            .focusRequester(focusRequester)
+            .focusable()
             .onPreviewKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown) {
                     when (event.key) {
                         Key.F, Key.F11 -> { onToggleFullscreen(); true }
                         Key.Escape -> {
                             if (isFullscreen) { onToggleFullscreen(); true }
-                            else false
+                            else { onBack(); true }
                         }
-                        Key.Spacebar -> { togglePlayPause(); true }
-                        Key.DirectionRight -> { seekBy(10_000L); true }
-                        Key.DirectionLeft -> { seekBy(-10_000L); true }
+                        Key.Backspace -> { onBack(); true }
+                        Key.Spacebar, Key.K -> { togglePlayPause(); true }
+                        Key.DirectionRight, Key.L -> { seekBy(10_000L); true }
+                        Key.DirectionLeft, Key.J -> { seekBy(-10_000L); true }
+                        Key.DirectionUp -> {
+                            setVolume(volume + 10)
+                            true
+                        }
+                        Key.DirectionDown -> {
+                            setVolume(volume - 10)
+                            true
+                        }
                         Key.M -> {
                             isMuted = !isMuted
                             try { player?.audio()?.isMute = isMuted } catch (_: Exception) {}
@@ -741,17 +796,19 @@ fun PlayerScreen(
                     }
                 } else false
             }
-            .combinedClickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() },
-                onClick = {
-                    if (!isLocked) showControls = !showControls
-                    else showControls = true
-                },
-                onDoubleClick = {
-                    onToggleFullscreen()
-                }
-            )
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = {
+                        focusRequester.requestFocus()
+                        if (!isLocked) showControls = !showControls
+                        else showControls = true
+                    },
+                    onDoubleTap = {
+                        focusRequester.requestFocus()
+                        onToggleFullscreen()
+                    }
+                )
+            }
     ) {
         // Video bitmap or fallback/connecting states
         when {
@@ -854,7 +911,7 @@ fun PlayerScreen(
                     hasEpisodes = allEpisodes.isNotEmpty(),
                     hasPrevEpisode = hasPrevEpisode,
                     hasNextEpisode = hasNextEpisode,
-                    hasSources = activeSourcesList.size > 1,
+                    hasSources = activeSourcesList.isNotEmpty(),
                     hasAudioTracks = audioTracks.isNotEmpty(),
                     hasSubtitles = activeSubtitlesList.isNotEmpty() || nativeSubTracks.isNotEmpty(),
                     hasVideo = videoFrame != null && isVideoReady && !isExtractingNextEp,

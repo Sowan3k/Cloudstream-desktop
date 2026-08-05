@@ -8,12 +8,18 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -153,6 +159,16 @@ fun HomeScreen(
                     )
                 }
 
+                // ── TYPE FILTER CHIPS ─────────────────────────────────────────
+                item {
+                    Win11TypeFilter(
+                        selected = selectedType,
+                        onSelect = { selectedType = it },
+                        modifier = Modifier.padding(horizontal = 28.dp)
+                    )
+                    Spacer(Modifier.height(18.dp))
+                }
+
                 // ── HERO BANNER ────────────────────────────────────────────────
                 if (featuredItems.isNotEmpty() && !isLoading) {
                     item {
@@ -170,16 +186,6 @@ fun HomeScreen(
                     }
                 }
 
-                // ── TYPE FILTER CHIPS ─────────────────────────────────────────
-                item {
-                    Win11TypeFilter(
-                        selected = selectedType,
-                        onSelect = { selectedType = it },
-                        modifier = Modifier.padding(horizontal = 28.dp)
-                    )
-                    Spacer(Modifier.height(24.dp))
-                }
-
                 // ── LOADING ────────────────────────────────────────────────────
                 if (isLoading) {
                     item { Win11Shimmer() }
@@ -195,23 +201,20 @@ fun HomeScreen(
                     // ── CONTINUE WATCHING ──────────────────────────────────────
                     if (watchHistory.isNotEmpty()) {
                         item {
-                            Win11SectionHeader(title = "Continue Watching")
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = 28.dp),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                items(watchHistory) { progress ->
-                                    Win11ContinueCard(
-                                        progress = progress,
-                                        onClick = {
-                                            onNavigate(DesktopScreen.Result(
-                                                url = progress.url,
-                                                apiName = progress.apiName,
-                                                autoPlay = true
-                                            ))
-                                        }
-                                    )
-                                }
+                            Win11HorizontalCategoryRow(
+                                title = "Continue Watching",
+                                items = watchHistory
+                            ) { progress ->
+                                Win11ContinueCard(
+                                    progress = progress,
+                                    onClick = {
+                                        onNavigate(DesktopScreen.Result(
+                                            url = progress.url,
+                                            apiName = progress.apiName,
+                                            autoPlay = true
+                                        ))
+                                    }
+                                )
                             }
                             Spacer(Modifier.height(28.dp))
                         }
@@ -220,23 +223,20 @@ fun HomeScreen(
                     // ── CATALOGUE ROWS ─────────────────────────────────────────
                     items(filteredLists) { pageList ->
                         if (pageList.list.isNotEmpty()) {
-                            Win11SectionHeader(title = pageList.name)
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = 28.dp),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                items(pageList.list) { item ->
-                                    MediaCard(
-                                        item = item,
-                                        onClick = {
-                                            onNavigate(DesktopScreen.Result(
-                                                url = item.url,
-                                                apiName = item.apiName,
-                                                searchResponse = item
-                                            ))
-                                        }
-                                    )
-                                }
+                            Win11HorizontalCategoryRow(
+                                title = pageList.name,
+                                items = pageList.list
+                            ) { item ->
+                                MediaCard(
+                                    item = item,
+                                    onClick = {
+                                        onNavigate(DesktopScreen.Result(
+                                            url = item.url,
+                                            apiName = item.apiName,
+                                            searchResponse = item
+                                        ))
+                                    }
+                                )
                             }
                             Spacer(Modifier.height(28.dp))
                         }
@@ -341,23 +341,30 @@ private fun Win11SmallButton(
         shape = RoundedCornerShape(6.dp),
         color = BgLayer,
         border = BorderStroke(1.dp, BorderSubtle),
-        modifier = Modifier.height(32.dp)
+        modifier = Modifier.height(30.dp)
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .padding(horizontal = 10.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Icon(icon, null, tint = TxtSecondary, modifier = Modifier.size(13.dp))
-            Text(
-                label,
-                color = TxtSecondary,
-                fontSize = 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 140.dp)
-            )
-            Icon(Icons.Default.KeyboardArrowDown, null, tint = TxtTertiary, modifier = Modifier.size(12.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(icon, null, tint = TxtSecondary, modifier = Modifier.size(13.5.dp))
+                Text(
+                    label,
+                    color = TxtSecondary,
+                    fontSize = 12.sp,
+                    lineHeight = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 140.dp).offset(y = (-1).dp)
+                )
+                Icon(Icons.Default.KeyboardArrowDown, null, tint = TxtTertiary, modifier = Modifier.size(12.dp))
+            }
         }
     }
 }
@@ -488,15 +495,23 @@ private fun Win11HeroBanner(
                     if (typeLabel != null) {
                         Surface(
                             shape = RoundedCornerShape(4.dp),
-                            color = Accent
+                            color = Accent,
+                            modifier = Modifier.height(20.dp)
                         ) {
-                            Text(
-                                typeLabel,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .padding(horizontal = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    typeLabel,
+                                    fontSize = 10.sp,
+                                    lineHeight = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
                         }
                         Spacer(Modifier.height(8.dp))
                     }
@@ -555,13 +570,19 @@ private fun Win11HeroBanner(
                             color = Color.White,
                             modifier = Modifier.height(34.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .padding(horizontal = 16.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(17.dp))
-                                Text("Play Stream", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(17.dp))
+                                    Text("Play Stream", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 13.sp, lineHeight = 13.sp)
+                                }
                             }
                         }
                         // Details button -> Goes to Details/Result page
@@ -572,13 +593,19 @@ private fun Win11HeroBanner(
                             border = BorderStroke(1.dp, Color.White.copy(0.3f)),
                             modifier = Modifier.height(34.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .padding(horizontal = 14.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.Info, null, tint = Color.White, modifier = Modifier.size(15.dp))
-                                Text("Details", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    Icon(Icons.Default.Info, null, tint = Color.White, modifier = Modifier.size(15.dp))
+                                    Text("Details", color = Color.White, fontSize = 13.sp, lineHeight = 13.sp, fontWeight = FontWeight.Medium)
+                                }
                             }
                         }
                     }
@@ -614,6 +641,7 @@ private fun Win11TypeFilter(
     onSelect: (TvType?) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val scrollState = rememberScrollState()
     val types = listOf(
         null to "All",
         TvType.Movie to "Movies",
@@ -625,7 +653,7 @@ private fun Win11TypeFilter(
     )
 
     Row(
-        modifier = modifier.horizontalScroll(rememberScrollState()),
+        modifier = modifier.horizontalScroll(scrollState),
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         types.forEach { (type, label) ->
@@ -633,23 +661,129 @@ private fun Win11TypeFilter(
             val textColor by animateColorAsState(
                 if (isSelected) Color.White else TxtTertiary, tween(150)
             )
-            val accentColor by animateColorAsState(
-                if (isSelected) Accent else Color.Transparent, tween(150)
-            )
 
             Surface(
                 onClick = { onSelect(type) },
-                shape = RoundedCornerShape(5.dp),
-                color = if (isSelected) Accent.copy(0.12f) else Color.Transparent,
-                border = BorderStroke(1.dp, if (isSelected) Accent.copy(0.5f) else BorderSubtle)
+                shape = RoundedCornerShape(6.dp),
+                color = if (isSelected) Accent.copy(0.15f) else Color.White.copy(0.04f),
+                border = BorderStroke(1.dp, if (isSelected) Accent.copy(0.6f) else BorderSubtle)
             ) {
-                Text(
-                    label,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
-                    color = textColor,
-                    fontSize = 12.sp,
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                )
+                Box(
+                    modifier = Modifier
+                        .height(30.dp)
+                        .padding(horizontal = 14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = label,
+                        color = textColor,
+                        fontSize = 12.5.sp,
+                        lineHeight = 12.5.sp,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                        modifier = Modifier.offset(y = (-1).dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ─── Category Row Wrapper ───────────────────────────────────────────────────
+
+@Composable
+private fun <T> Win11HorizontalCategoryRow(
+    title: String,
+    items: List<T>,
+    modifier: Modifier = Modifier,
+    itemContent: @Composable (item: T) -> Unit
+) {
+    val lazyListState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Column(modifier = modifier) {
+        Win11SectionHeader(title = title)
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .hoverable(interactionSource),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            LazyRow(
+                state = lazyListState,
+                contentPadding = PaddingValues(horizontal = 28.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                items(items) { item ->
+                    itemContent(item)
+                }
+            }
+
+            // Left scroll arrow
+            androidx.compose.animation.AnimatedVisibility(
+                visible = isHovered && lazyListState.canScrollBackward,
+                enter = fadeIn(tween(150)),
+                exit = fadeOut(tween(150)),
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 12.dp)
+            ) {
+                Surface(
+                    onClick = {
+                        coroutineScope.launch {
+                            lazyListState.animateScrollBy(-500f)
+                        }
+                    },
+                    shape = RoundedCornerShape(50),
+                    color = Color.Black.copy(0.75f),
+                    border = BorderStroke(1.dp, Color.White.copy(0.25f)),
+                    shadowElevation = 6.dp,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.ChevronLeft,
+                            contentDescription = "Scroll Left",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+            }
+
+            // Right scroll arrow
+            androidx.compose.animation.AnimatedVisibility(
+                visible = isHovered && lazyListState.canScrollForward,
+                enter = fadeIn(tween(150)),
+                exit = fadeOut(tween(150)),
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 12.dp)
+            ) {
+                Surface(
+                    onClick = {
+                        coroutineScope.launch {
+                            lazyListState.animateScrollBy(500f)
+                        }
+                    },
+                    shape = RoundedCornerShape(50),
+                    color = Color.Black.copy(0.75f),
+                    border = BorderStroke(1.dp, Color.White.copy(0.25f)),
+                    shadowElevation = 6.dp,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = "Scroll Right",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
             }
         }
     }

@@ -8,7 +8,9 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -23,6 +25,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -76,6 +80,31 @@ private val TV_TYPE_LABELS = listOf(
     TvType.AnimeMovie to "Anime Movies",
 )
 
+// ─── Singleton State to Persist Search Results Across Navigation ───────────────
+object DesktopSearchState {
+    var searchQuery by mutableStateOf("")
+    var providerResults by mutableStateOf<List<ProviderSearchResult>>(emptyList())
+    var isSearching by mutableStateOf(false)
+    var searchError by mutableStateOf<String?>(null)
+    var selectedType by mutableStateOf<TvType?>(null)
+    var selectedApi by mutableStateOf<MainAPI?>(null)
+    var searchedCount by mutableStateOf(0)
+    var totalCount by mutableStateOf(0)
+    var activeSearchJob: Job? = null
+
+    fun clear() {
+        activeSearchJob?.cancel()
+        activeSearchJob = null
+        searchQuery = ""
+        providerResults = emptyList()
+        isSearching = false
+        searchError = null
+        selectedType = null
+        searchedCount = 0
+        totalCount = 0
+    }
+}
+
 @Composable
 fun SearchScreen(
     initialQuery: String = "",
@@ -87,16 +116,22 @@ fun SearchScreen(
 
     var searchHistoryState by remember { mutableStateOf(DesktopDataStore.currentSettings.searchHistory) }
 
-    var searchQuery by remember { mutableStateOf(initialQuery) }
-    var providerResults by remember { mutableStateOf<List<ProviderSearchResult>>(emptyList()) }
-    var isSearching by remember { mutableStateOf(false) }
-    var searchError by remember { mutableStateOf<String?>(null) }
-    var selectedType by remember { mutableStateOf<TvType?>(null) }
-    var selectedApi by remember { mutableStateOf<MainAPI?>(null) }
-    var searchedCount by remember { mutableStateOf(0) }
-    var totalCount by remember { mutableStateOf(0) }
+    val searchQuery = DesktopSearchState.searchQuery
+    val providerResults = DesktopSearchState.providerResults
+    val isSearching = DesktopSearchState.isSearching
+    val searchError = DesktopSearchState.searchError
+    var selectedType by DesktopSearchState::selectedType
+    var selectedApi by DesktopSearchState::selectedApi
+    val searchedCount = DesktopSearchState.searchedCount
+    val totalCount = DesktopSearchState.totalCount
 
-    var activeSearchJob by remember { mutableStateOf<Job?>(null) }
+    var lastExecutedQuery by remember { mutableStateOf(searchQuery) }
+
+    val searchFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        searchFocusRequester.requestFocus()
+    }
 
     val apisToSearch = if (selectedApi != null) listOf(selectedApi!!) else apis
 
@@ -120,24 +155,24 @@ fun SearchScreen(
     fun executeSearch(query: String) {
         val cleanQuery = query.trim()
         if (cleanQuery.isBlank()) {
-            providerResults = emptyList()
-            isSearching = false
+            DesktopSearchState.providerResults = emptyList()
+            DesktopSearchState.isSearching = false
             return
         }
 
-        activeSearchJob?.cancel()
+        DesktopSearchState.activeSearchJob?.cancel()
         DesktopDataStore.saveSearchQuery(cleanQuery)
         searchHistoryState = DesktopDataStore.currentSettings.searchHistory
 
-        activeSearchJob = coroutineScope.launch {
-            isSearching = true
-            searchError = null
-            providerResults = emptyList()
-            selectedType = null
+        DesktopSearchState.activeSearchJob = coroutineScope.launch {
+            DesktopSearchState.isSearching = true
+            DesktopSearchState.searchError = null
+            DesktopSearchState.providerResults = emptyList()
+            DesktopSearchState.selectedType = null
 
             val currentApis = apisToSearch.toList()
-            totalCount = currentApis.size
-            searchedCount = 0
+            DesktopSearchState.totalCount = currentApis.size
+            DesktopSearchState.searchedCount = 0
 
             val mutex = Mutex()
             val accumulated = mutableListOf<ProviderSearchResult>()
@@ -153,7 +188,7 @@ fun SearchScreen(
                     catch (_: Exception) { emptyList() }
 
                     mutex.withLock {
-                        searchedCount++
+                        DesktopSearchState.searchedCount++
                         if (results.isNotEmpty()) {
                             accumulated.add(
                                 ProviderSearchResult(
@@ -162,7 +197,7 @@ fun SearchScreen(
                                 )
                             )
                             withContext(Dispatchers.Main) {
-                                providerResults = accumulated.toList()
+                                DesktopSearchState.providerResults = accumulated.toList()
                             }
                         }
                     }
@@ -170,19 +205,30 @@ fun SearchScreen(
             }
 
             jobs.joinAll()
-            isSearching = false
+            DesktopSearchState.isSearching = false
+        }
+    }
+
+    LaunchedEffect(initialQuery) {
+        if (initialQuery.isNotBlank() && initialQuery != searchQuery) {
+            DesktopSearchState.searchQuery = initialQuery
+            lastExecutedQuery = initialQuery
+            executeSearch(initialQuery)
         }
     }
 
     // Debounced live search
     LaunchedEffect(searchQuery) {
-        activeSearchJob?.cancel()
         if (searchQuery.trim().length >= 2) {
-            delay(150)
-            executeSearch(searchQuery)
+            if (searchQuery != lastExecutedQuery || providerResults.isEmpty()) {
+                delay(150)
+                lastExecutedQuery = searchQuery
+                executeSearch(searchQuery)
+            }
         } else if (searchQuery.isBlank()) {
-            providerResults = emptyList()
-            isSearching = false
+            lastExecutedQuery = ""
+            DesktopSearchState.providerResults = emptyList()
+            DesktopSearchState.isSearching = false
         }
     }
 
@@ -321,7 +367,7 @@ fun SearchScreen(
                     }
                     BasicTextField(
                         value = searchQuery,
-                        onValueChange = { searchQuery = it },
+                        onValueChange = { DesktopSearchState.searchQuery = it },
                         singleLine = true,
                         textStyle = TextStyle(color = TextPrimary, fontSize = 13.sp),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -334,17 +380,15 @@ fun SearchScreen(
                                 innerTextField()
                             }
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f).focusRequester(searchFocusRequester)
                     )
                     if (searchQuery.isNotEmpty()) {
                         Icon(
                             Icons.Default.Close, null,
                             tint = TextTertiary,
                             modifier = Modifier.size(14.dp).clickable {
-                                activeSearchJob?.cancel()
-                                searchQuery = ""
-                                providerResults = emptyList()
-                                isSearching = false
+                                lastExecutedQuery = ""
+                                DesktopSearchState.clear()
                             }
                         )
                     }
@@ -486,7 +530,7 @@ fun SearchScreen(
                                     Win11TagChip(
                                         label = q,
                                         isHistory = true,
-                                        onClick = { searchQuery = q },
+                                        onClick = { DesktopSearchState.searchQuery = q },
                                         onRemove = {
                                             DesktopDataStore.removeSearchQuery(q)
                                             searchHistoryState = DesktopDataStore.currentSettings.searchHistory
@@ -510,7 +554,7 @@ fun SearchScreen(
                                 Win11TagChip(
                                     label = tag,
                                     isHistory = false,
-                                    onClick = { searchQuery = tag }
+                                    onClick = { DesktopSearchState.searchQuery = tag }
                                 )
                             }
                         }
@@ -565,7 +609,7 @@ fun SearchScreen(
                     contentPadding = PaddingValues(vertical = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
-                    items(filteredProviderResults, key = { it.providerName }) { providerResult ->
+                    items(filteredProviderResults) { providerResult ->
                         Win11SearchProviderSection(
                             providerResult = providerResult,
                             onItemClick = { item ->
@@ -641,6 +685,11 @@ private fun Win11SearchProviderSection(
     providerResult: ProviderSearchResult,
     onItemClick: (SearchResponse) -> Unit
 ) {
+    val lazyListState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 28.dp, end = 28.dp, bottom = 10.dp),
@@ -667,17 +716,90 @@ private fun Win11SearchProviderSection(
             }
         }
 
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 28.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .hoverable(interactionSource),
+            contentAlignment = Alignment.CenterStart
         ) {
-            items(providerResult.items, key = { it.url }) { item ->
-                MediaCard(
-                    item = item,
-                    onClick = { onItemClick(item) },
-                    width = 130.dp,
-                    height = 190.dp
-                )
+            LazyRow(
+                state = lazyListState,
+                contentPadding = PaddingValues(horizontal = 28.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                items(providerResult.items) { item ->
+                    MediaCard(
+                        item = item,
+                        onClick = { onItemClick(item) },
+                        width = 130.dp,
+                        height = 190.dp
+                    )
+                }
+            }
+
+            // Left scroll arrow
+            androidx.compose.animation.AnimatedVisibility(
+                visible = isHovered && lazyListState.canScrollBackward,
+                enter = fadeIn(tween(150)),
+                exit = fadeOut(tween(150)),
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 12.dp)
+            ) {
+                Surface(
+                    onClick = {
+                        coroutineScope.launch {
+                            lazyListState.animateScrollBy(-500f)
+                        }
+                    },
+                    shape = RoundedCornerShape(50),
+                    color = Color.Black.copy(0.75f),
+                    border = BorderStroke(1.dp, Color.White.copy(0.25f)),
+                    shadowElevation = 6.dp,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.ChevronLeft,
+                            contentDescription = "Scroll Left",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+            }
+
+            // Right scroll arrow
+            androidx.compose.animation.AnimatedVisibility(
+                visible = isHovered && lazyListState.canScrollForward,
+                enter = fadeIn(tween(150)),
+                exit = fadeOut(tween(150)),
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 12.dp)
+            ) {
+                Surface(
+                    onClick = {
+                        coroutineScope.launch {
+                            lazyListState.animateScrollBy(500f)
+                        }
+                    },
+                    shape = RoundedCornerShape(50),
+                    color = Color.Black.copy(0.75f),
+                    border = BorderStroke(1.dp, Color.White.copy(0.25f)),
+                    shadowElevation = 6.dp,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = "Scroll Right",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
             }
         }
     }

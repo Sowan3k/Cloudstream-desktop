@@ -23,6 +23,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
@@ -100,7 +104,63 @@ fun main() {
                     }
                 }
 
-                Column(modifier = Modifier.fillMaxSize()) {
+                val windowFocusRequester = remember { FocusRequester() }
+
+                LaunchedEffect(Unit) {
+                    windowFocusRequester.requestFocus()
+                }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .focusRequester(windowFocusRequester)
+                        .focusable()
+                        .onPreviewKeyEvent { event ->
+                            if (event.type == KeyEventType.KeyDown) {
+                                val isCtrl = event.isCtrlPressed
+                                val isAlt = event.isAltPressed
+
+                                when {
+                                    event.key == Key.F11 -> {
+                                        toggleFullscreen()
+                                        true
+                                    }
+                                    (isCtrl && event.key == Key.F) || (event.key == Key.Slash) -> {
+                                        if (currentScreen !is DesktopScreen.Search) {
+                                            navigateTo(DesktopScreen.Search())
+                                        }
+                                        true
+                                    }
+                                    (isAlt || isCtrl) && event.key == Key.One -> {
+                                        navigateTo(DesktopScreen.Home)
+                                        true
+                                    }
+                                    (isAlt || isCtrl) && event.key == Key.Two -> {
+                                        navigateTo(DesktopScreen.Search())
+                                        true
+                                    }
+                                    (isAlt || isCtrl) && event.key == Key.Three -> {
+                                        navigateTo(DesktopScreen.Library)
+                                        true
+                                    }
+                                    (isAlt || isCtrl) && event.key == Key.Four -> {
+                                        navigateTo(DesktopScreen.Plugins)
+                                        true
+                                    }
+                                    (isAlt || isCtrl) && event.key == Key.Five -> {
+                                        navigateTo(DesktopScreen.Settings)
+                                        true
+                                    }
+                                    (isAlt && event.key == Key.DirectionLeft) ||
+                                    (currentScreen !is DesktopScreen.Player && currentScreen !is DesktopScreen.Home && (event.key == Key.Escape || event.key == Key.Backspace)) -> {
+                                        navigateBack()
+                                        true
+                                    }
+                                    else -> false
+                                }
+                            } else false
+                        }
+                ) {
                     // Custom dark title bar for windowed mode (hidden in Fullscreen)
                     if (!isFullscreen) {
                         WindowDraggableArea {
