@@ -38,7 +38,9 @@ class BundledProviderPrivacyTest {
             assertEquals(14, trackers.size)
             for (tracker in trackers) {
                 val type = tracker.javaClass
-                savedEndpoints += tracker to (type.getMethod("getENDPOINT").invoke(tracker) as String)
+                val endpoint = type.getMethod("getENDPOINT").invoke(tracker) as String
+                assertEquals("", endpoint, "Provider registration must disable its tracker")
+                savedEndpoints += tracker to endpoint
                 type.getMethod("setENDPOINT", String::class.java).invoke(tracker, "http://127.0.0.1:${server.address.port}/")
             }
             suspend fun send(tracker: Any) {
