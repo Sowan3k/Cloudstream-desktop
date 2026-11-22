@@ -47,7 +47,7 @@ import com.lagradost.cloudstream.desktop.ui.screens.plugins.PluginsScreen
 import com.lagradost.cloudstream.desktop.ui.screens.result.ResultScreen
 import com.lagradost.cloudstream.desktop.ui.screens.search.SearchScreen
 import com.lagradost.cloudstream.desktop.ui.screens.settings.SettingsScreen
-import com.lagradost.cloudstream.desktop.ui.theme.CloudStreamDesktopTheme
+import com.lagradost.cloudstream.desktop.ui.theme.*
 
 fun main() {
     // Setup Coil 3 image loader with OkHttp, User-Agent, and TrustAll SSL for poster URLs
@@ -59,7 +59,7 @@ fun main() {
 
     application {
         // Load local desktop settings
-        val settings = remember { DesktopDataStore.currentSettings }
+        val isDarkTheme by remember { derivedStateOf { DesktopDataStore.currentSettings.isDarkMode } }
         val windowState = rememberWindowState(width = 1280.dp, height = 800.dp)
         var windowedPlacement by remember { mutableStateOf(WindowPlacement.Floating) }
 
@@ -77,7 +77,7 @@ fun main() {
                 DesktopPluginLoader.loadAllLocalPlugins()
             }
 
-            CloudStreamDesktopTheme(darkTheme = settings.isDarkMode) {
+            CloudStreamDesktopTheme(darkTheme = isDarkTheme) {
                 var currentScreen by remember { mutableStateOf<DesktopScreen>(DesktopScreen.Home) }
                 val screenHistory = remember { mutableStateListOf<DesktopScreen>() }
                 var playerOwnsFullscreen by remember { mutableStateOf(false) }
@@ -274,8 +274,8 @@ private fun WindowScope.CustomTitleBar(
         modifier = Modifier
             .fillMaxWidth()
             .height(36.dp),
-        color = Color(0xFF121212),
-        border = BorderStroke(1.dp, Color(0x1AFFFFFF))
+        color = SurfaceBase,
+        border = BorderStroke(1.dp, BorderSubtle)
     ) {
         Row(
             modifier = Modifier.fillMaxSize(),
@@ -298,7 +298,7 @@ private fun WindowScope.CustomTitleBar(
                     Spacer(Modifier.width(10.dp))
                     Text(
                         title,
-                        color = Color(0xFFB0B0B0),
+                        color = TextSecondary,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
                     )
@@ -352,12 +352,12 @@ private fun Win11CaptionButton(
 
     val bgColor by animateColorAsState(
         if (hovered) {
-            if (isClose) Color(0xFFE81123) else Color(0xFF333333)
+            if (isClose) Color(0xFFE81123) else SurfaceHover
         } else Color.Transparent,
         animationSpec = tween(120)
     )
     val iconColor by animateColorAsState(
-        if (isClose && hovered) Color.White else if (hovered) Color.White else Color(0xFFB0B0B0),
+        if (isClose && hovered) Color.White else if (hovered) TextPrimary else TextSecondary,
         animationSpec = tween(120)
     )
 

@@ -21,18 +21,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
-// ─── Windows 11 Color Tokens ──────────────────────────────────────────────────
-private val SurfaceBase    = Color(0xFF1C1C1C)
-private val SurfaceLayer   = Color(0xFF242424)
-private val SurfaceCard    = Color(0xFF2C2C2C)
-private val SurfaceHover   = Color(0xFF323232)
-private val BorderSubtle   = Color(0x18FFFFFF)
-private val BorderDefault  = Color(0x26FFFFFF)
-private val TextPrimary    = Color(0xFFFFFFFF)
-private val TextSecondary  = Color(0x99FFFFFF)
-private val TextTertiary   = Color(0x66FFFFFF)
-private val AccentBlue     = Color(0xFF0078D4)
+import com.lagradost.cloudstream.desktop.ui.theme.*
 
 @Composable
 fun DesktopSidebar(
@@ -40,6 +29,7 @@ fun DesktopSidebar(
     onNavigate: (DesktopScreen) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val sidebarBorder = SidebarBorder
     val navItems = listOf(
         NavItem(Icons.Default.Home, "Home", DesktopScreen.Home),
         NavItem(Icons.Default.Search, "Search", DesktopScreen.Search()),
@@ -51,11 +41,11 @@ fun DesktopSidebar(
         modifier = modifier
             .fillMaxHeight()
             .width(68.dp)
-            .background(SurfaceBase)
+            .background(SidebarBackground)
             .drawBehind {
                 // Right border separator
                 drawRect(
-                    color = BorderSubtle,
+                    color = sidebarBorder,
                     topLeft = androidx.compose.ui.geometry.Offset(size.width - 1.dp.toPx(), 0f),
                     size = androidx.compose.ui.geometry.Size(1.dp.toPx(), size.height)
                 )
@@ -110,15 +100,15 @@ private fun Win11NavItem(
     val isHighlighted = hovered || focused
 
     val iconColor by animateColorAsState(
-        if (isSelected) TextPrimary else if (isHighlighted) TextSecondary else TextTertiary,
+        SidebarForeground.copy(alpha = if (isSelected) 1f else if (isHighlighted) 0.85f else 0.65f),
         animationSpec = tween(150)
     )
     val bgColor by animateColorAsState(
-        if (isSelected) AccentBlue.copy(alpha = 0.12f) else if (isHighlighted) SurfaceHover else Color.Transparent,
+        if (isSelected) SidebarAccent.copy(alpha = 0.12f) else if (isHighlighted) SidebarHover else Color.Transparent,
         animationSpec = tween(150)
     )
     val indicatorColor by animateColorAsState(
-        if (isSelected) AccentBlue else if (focused) AccentBlue.copy(alpha = 0.6f) else Color.Transparent,
+        if (isSelected) SidebarAccent else if (focused) SidebarAccent.copy(alpha = 0.6f) else Color.Transparent,
         animationSpec = tween(200)
     )
 
@@ -130,7 +120,7 @@ private fun Win11NavItem(
             .background(bgColor)
             .border(
                 width = if (focused) 1.5.dp else 0.dp,
-                color = if (focused) AccentBlue else Color.Transparent,
+                color = if (focused) SidebarAccent else Color.Transparent,
                 shape = RoundedCornerShape(6.dp)
             )
             .hoverable(interactionSource)

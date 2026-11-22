@@ -48,6 +48,7 @@ import com.lagradost.cloudstream.desktop.storage.WatchProgress
 import com.lagradost.cloudstream.desktop.utils.DesktopStreamProxy
 import com.lagradost.cloudstream.desktop.ui.navigation.StreamSourceInfo
 import com.lagradost.cloudstream.desktop.ui.navigation.SubtitleTrackInfo
+import com.lagradost.cloudstream.desktop.ui.theme.*
 import com.lagradost.cloudstream3.AnimeLoadResponse
 import com.lagradost.cloudstream3.Episode
 import com.lagradost.cloudstream3.LoadResponse
@@ -1153,37 +1154,37 @@ fun PlayerScreen(
             isExtractingNextEp -> Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xFF121212)),
+                    .background(SurfaceBase),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(
-                        color = Color(0xFFE50914),
+                        color = Accent,
                         strokeWidth = 3.dp,
                         modifier = Modifier.size(44.dp)
                     )
                     Spacer(Modifier.height(18.dp))
-                    Text("Fetching stream sources…", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                    Text("Fetching stream sources…", color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                     Spacer(Modifier.height(6.dp))
-                    Text("Connecting to provider link", color = Color(0xFFB0B0B0), fontSize = 12.sp)
+                    Text("Connecting to provider link", color = TextSecondary, fontSize = 12.sp)
                 }
             }
             videoFrame == null || !isVideoReady -> Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xFF121212)),
+                    .background(SurfaceBase),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(
-                        color = Color(0xFFE50914),
+                        color = Accent,
                         strokeWidth = 3.dp,
                         modifier = Modifier.size(44.dp)
                     )
                     Spacer(Modifier.height(18.dp))
-                    Text("Connecting to ${activeSource.name}…", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                    Text("Connecting to ${activeSource.name}…", color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                     Spacer(Modifier.height(6.dp))
-                    Text("Buffering initial stream segments", color = Color(0xFFB0B0B0), fontSize = 12.sp)
+                    Text("Buffering initial stream segments", color = TextSecondary, fontSize = 12.sp)
                 }
             }
             else -> Image(
@@ -1468,7 +1469,7 @@ private fun PlayerControlsOverlay(
                             Text(episodeName, color = Color.White.copy(0.7f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text("  •  ", color = Color.White.copy(0.4f), fontSize = 12.sp)
                         }
-                        Text(cleanServerTitle(activeSourceName), color = Color(0xFFE50914), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                        Text(cleanServerTitle(activeSourceName), color = MediaAccent, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                     }
                 }
             }
@@ -1479,8 +1480,8 @@ private fun PlayerControlsOverlay(
                     Surface(
                         onClick = onEpisodesClick,
                         shape = RoundedCornerShape(6.dp),
-                        color = Color(0xFF252525),
-                        border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+                        color = SurfaceCard,
+                        border = BorderStroke(1.dp, BorderSubtle),
                         modifier = Modifier.height(32.dp)
                     ) {
                         Row(
@@ -1488,8 +1489,8 @@ private fun PlayerControlsOverlay(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Icon(Icons.Default.FormatListBulleted, null, modifier = Modifier.size(14.dp), tint = Color.White)
-                            Text("Episodes", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Medium)
+                            Icon(Icons.Default.FormatListBulleted, null, modifier = Modifier.size(14.dp), tint = TextPrimary)
+                            Text("Episodes", fontSize = 12.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
@@ -1499,8 +1500,8 @@ private fun PlayerControlsOverlay(
                     Surface(
                         onClick = onSourcesClick,
                         shape = RoundedCornerShape(6.dp),
-                        color = Color(0xFF252525),
-                        border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+                        color = SurfaceCard,
+                        border = BorderStroke(1.dp, BorderSubtle),
                         modifier = Modifier.height(32.dp)
                     ) {
                         Row(
@@ -1508,16 +1509,16 @@ private fun PlayerControlsOverlay(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Icon(Icons.Default.Dns, null, modifier = Modifier.size(14.dp), tint = Color.White)
-                            Text("Sources", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Medium)
+                            Icon(Icons.Default.Dns, null, modifier = Modifier.size(14.dp), tint = TextPrimary)
+                            Text("Sources", fontSize = 12.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
 
                 // Speed badge
                 if (playbackSpeed != 1.0f) {
-                    Surface(color = Color(0xFFE50914), shape = RoundedCornerShape(4.dp)) {
-                        Text("${playbackSpeed}x", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Surface(color = Accent, shape = RoundedCornerShape(4.dp)) {
+                        Text("${playbackSpeed}x", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), color = OnAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -1612,7 +1613,7 @@ private fun PlayerControlsOverlay(
                         modifier = Modifier.weight(1f),
                         colors = SliderDefaults.colors(
                             thumbColor = Color.White,
-                            activeTrackColor = Color(0xFFE50914),
+                            activeTrackColor = MediaAccent,
                             inactiveTrackColor = Color.White.copy(0.25f)
                         )
                     )
@@ -1773,8 +1774,8 @@ private fun RightSidebarDrawer(
                             interactionSource = remember { MutableInteractionSource() },
                             onClick = {}
                         ),
-                    color = Color(0xFF1C1C1C).copy(0.98f),
-                    border = BorderStroke(1.dp, Color(0x1AFFFFFF))
+                    color = SurfaceLayer.copy(0.98f),
+                    border = BorderStroke(1.dp, BorderSubtle)
                 ) {
                     Column(
                         modifier = Modifier
@@ -1813,7 +1814,7 @@ private fun SourcesPickerDialog(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Default.Dns, null,
-                    tint = Color(0xFFE50914),
+                    tint = AccentText,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(Modifier.width(10.dp))
@@ -1821,21 +1822,21 @@ private fun SourcesPickerDialog(
                     Text(
                         "Stream Sources",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = Color.White
+                        color = TextPrimary
                     )
                     Text(
                         "${sources.size} mirror server${if (sources.size != 1) "s" else ""} available",
-                        color = Color(0xFFB0B0B0),
+                        color = TextSecondary,
                         fontSize = 12.sp
                     )
                 }
             }
             IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.Close, "Close", tint = Color(0xFFB0B0B0), modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Close, "Close", tint = TextSecondary, modifier = Modifier.size(18.dp))
             }
         }
 
-        HorizontalDivider(color = Color(0x1AFFFFFF))
+        HorizontalDivider(color = BorderSubtle)
         Spacer(Modifier.height(14.dp))
 
         // Full Height Scrollable Item List
@@ -1860,7 +1861,7 @@ private fun SourcesPickerDialog(
                         "4K" -> Pair(Color(0xFFD97706), Color.Black)
                         "1080p" -> Pair(Color(0xFF0078D4), Color.White)
                         "720p" -> Pair(Color(0xFF107C41), Color.White)
-                        else -> Pair(Color(0xFF333333), Color.White)
+                        else -> Pair(SurfaceHover, TextPrimary)
                     }
                     Surface(
                         color = badgeBg,
@@ -1879,7 +1880,7 @@ private fun SourcesPickerDialog(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             cleanedTitle,
-                            color = Color.White,
+                            color = TextPrimary,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                             fontSize = 13.sp,
                             maxLines = 1,
@@ -1888,7 +1889,7 @@ private fun SourcesPickerDialog(
                         Spacer(Modifier.height(2.dp))
                         Text(
                             source.url,
-                            color = Color(0xFFB0B0B0),
+                            color = TextSecondary,
                             fontSize = 11.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -1900,7 +1901,7 @@ private fun SourcesPickerDialog(
                         Icon(
                             Icons.Default.Check,
                             null,
-                            tint = Color(0xFFE50914),
+                            tint = AccentText,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -1941,7 +1942,7 @@ private fun AudioTrackPickerDialog(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Default.Audiotrack, null,
-                    tint = Color(0xFFE50914),
+                    tint = AccentText,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(Modifier.width(10.dp))
@@ -1949,21 +1950,21 @@ private fun AudioTrackPickerDialog(
                     Text(
                         "Audio Track",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = Color.White
+                        color = TextPrimary
                     )
                     Text(
                         "Select active audio stream language",
-                        color = Color(0xFFB0B0B0),
+                        color = TextSecondary,
                         fontSize = 12.sp
                     )
                 }
             }
             IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.Close, "Close", tint = Color(0xFFB0B0B0), modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Close, "Close", tint = TextSecondary, modifier = Modifier.size(18.dp))
             }
         }
 
-        HorizontalDivider(color = Color(0x1AFFFFFF))
+        HorizontalDivider(color = BorderSubtle)
         Spacer(Modifier.height(14.dp))
 
         Column(
@@ -1983,7 +1984,7 @@ private fun AudioTrackPickerDialog(
                 ) {
                     Text(
                         cleanName,
-                        color = Color.White,
+                        color = TextPrimary,
                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                         fontSize = 13.sp,
                         modifier = Modifier.weight(1f)
@@ -1992,7 +1993,7 @@ private fun AudioTrackPickerDialog(
                         Icon(
                             Icons.Default.Check,
                             null,
-                            tint = Color(0xFFE50914),
+                            tint = AccentText,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -2028,7 +2029,7 @@ private fun CombinedSubtitlePickerDialog(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Default.ClosedCaption, null,
-                    tint = Color(0xFFE50914),
+                    tint = AccentText,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(Modifier.width(10.dp))
@@ -2036,21 +2037,21 @@ private fun CombinedSubtitlePickerDialog(
                     Text(
                         "Subtitles",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = Color.White
+                        color = TextPrimary
                     )
                     Text(
                         "Select subtitles track or embedded stream",
-                        color = Color(0xFFB0B0B0),
+                        color = TextSecondary,
                         fontSize = 12.sp
                     )
                 }
             }
             IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.Close, "Close", tint = Color(0xFFB0B0B0), modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Close, "Close", tint = TextSecondary, modifier = Modifier.size(18.dp))
             }
         }
 
-        HorizontalDivider(color = Color(0x1AFFFFFF))
+        HorizontalDivider(color = BorderSubtle)
         Spacer(Modifier.height(14.dp))
 
         Column(
@@ -2060,12 +2061,12 @@ private fun CombinedSubtitlePickerDialog(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            status?.let { Text(it, color = Color(0xFFB0B0B0), fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp)) }
+            status?.let { Text(it, color = TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp)) }
             SubtitleOption("Off", selectedExternal == null && selectedNativeId == -1, onClick = onDisable)
 
             if (nativeTracks.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
-                Text("Embedded Subtitles", color = Color(0xFFE50914), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text("Embedded Subtitles", color = AccentText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 nativeTracks.filter { it.id() != -1 }.forEach { track ->
                     val isSelected = selectedExternal == null && track.id() == selectedNativeId
                     SubtitleOption(cleanAudioTrackName(track.description()), isSelected, onClick = { onSelectNative(track.id()) })
@@ -2074,7 +2075,7 @@ private fun CombinedSubtitlePickerDialog(
 
             if (externalSubtitles.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
-                Text("External Subtitles", color = Color(0xFFE50914), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text("External Subtitles", color = AccentText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 externalSubtitles.forEach { track ->
                     val isSelected = track == selectedExternal
                     SubtitleOption(
@@ -2116,7 +2117,7 @@ private fun EpisodesPickerDialog(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Default.VideoLibrary, null,
-                    tint = Color(0xFFE50914),
+                    tint = AccentText,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(Modifier.width(10.dp))
@@ -2124,34 +2125,34 @@ private fun EpisodesPickerDialog(
                     Text(
                         "Episodes",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = Color.White
+                        color = TextPrimary
                     )
                     Text(
                         "${episodes.size} episode${if (episodes.size != 1) "s" else ""} available",
-                        color = Color(0xFFB0B0B0),
+                        color = TextSecondary,
                         fontSize = 12.sp
                     )
                 }
             }
             IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.Close, "Close", tint = Color(0xFFB0B0B0), modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Close, "Close", tint = TextSecondary, modifier = Modifier.size(18.dp))
             }
         }
 
-        HorizontalDivider(color = Color(0x1AFFFFFF))
+        HorizontalDivider(color = BorderSubtle)
 
         if (seasons.size > 1) {
             Spacer(Modifier.height(12.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(seasons) { season ->
                     val isSelected = selectedSeason == season
-                    val textColor by animateColorAsState(if (isSelected) Color(0xFFE50914) else Color(0xFFB0B0B0), tween(150))
+                    val textColor by animateColorAsState(if (isSelected) AccentText else TextSecondary, tween(150))
 
                     Surface(
                         onClick = { selectedSeason = season },
                         shape = RoundedCornerShape(5.dp),
-                        color = if (isSelected) Color(0xFFE50914).copy(0.15f) else Color.Transparent,
-                        border = BorderStroke(1.dp, if (isSelected) Color(0xFFE50914) else Color(0x1AFFFFFF))
+                        color = if (isSelected) Accent.copy(0.15f) else Color.Transparent,
+                        border = BorderStroke(1.dp, if (isSelected) Accent else BorderSubtle)
                     ) {
                         Text(
                             "Season $season",
@@ -2183,13 +2184,13 @@ private fun EpisodesPickerDialog(
                     onClick = { onSelect(ep) }
                 ) {
                     Surface(
-                        color = if (isSelected) Color(0xFFE50914) else Color(0xFF333333),
+                        color = if (isSelected) Accent else SurfaceHover,
                         shape = RoundedCornerShape(4.dp)
                     ) {
                         Text(
                             epLabel,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            color = if (isSelected) Color.White else Color.White,
+                            color = if (isSelected) OnAccent else TextPrimary,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -2198,7 +2199,7 @@ private fun EpisodesPickerDialog(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             ep.name ?: epLabel,
-                            color = Color.White,
+                            color = TextPrimary,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                             fontSize = 13.sp,
                             maxLines = 1,
@@ -2209,7 +2210,7 @@ private fun EpisodesPickerDialog(
                                 Spacer(Modifier.height(2.dp))
                                 Text(
                                     desc,
-                                    color = Color(0xFFB0B0B0),
+                                    color = TextSecondary,
                                     fontSize = 11.sp,
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
@@ -2221,7 +2222,7 @@ private fun EpisodesPickerDialog(
                     if (isSelected) {
                         Icon(
                             Icons.Default.Check, null,
-                            tint = Color(0xFFE50914),
+                            tint = AccentText,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -2239,7 +2240,7 @@ private fun SubtitleOption(label: String, isSelected: Boolean, onClick: () -> Un
     ) {
         Text(
             label,
-            color = Color.White,
+            color = TextPrimary,
             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
             fontSize = 13.sp,
             modifier = Modifier.weight(1f)
@@ -2248,7 +2249,7 @@ private fun SubtitleOption(label: String, isSelected: Boolean, onClick: () -> Un
             Icon(
                 Icons.Default.Check,
                 null,
-                tint = Color(0xFFE50914),
+                tint = AccentText,
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -2269,10 +2270,10 @@ private fun Win11SidebarOptionCard(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(6.dp),
-        color = if (isSelected) Color(0xFF252525) else if (hovered) Color(0xFF333333) else Color(0xFF1C1C1C),
+        color = if (isSelected) SurfaceCard else if (hovered) SurfaceHover else SurfaceLayer,
         border = BorderStroke(
             1.dp,
-            if (isSelected) Color(0xFFE50914) else if (hovered) Color(0x33FFFFFF) else Color(0x1AFFFFFF)
+            if (isSelected) Accent else if (hovered) BorderDefault else BorderSubtle
         ),
         modifier = Modifier.fillMaxWidth().hoverable(interactionSource)
     ) {
@@ -2286,7 +2287,7 @@ private fun Win11SidebarOptionCard(
                     .width(3.dp)
                     .fillMaxHeight()
                     .background(
-                        if (isSelected) Color(0xFFE50914) else Color.Transparent,
+                        if (isSelected) Accent else Color.Transparent,
                         shape = RoundedCornerShape(2.dp)
                     )
             )
@@ -2314,12 +2315,12 @@ private fun SpeedPickerDialog(visible: Boolean, current: Float, onSelect: (Float
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Playback Speed", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White)
+            Text("Playback Speed", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = TextPrimary)
             IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.Close, "Close", tint = Color(0xFFB0B0B0), modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Close, "Close", tint = TextSecondary, modifier = Modifier.size(18.dp))
             }
         }
-        HorizontalDivider(color = Color(0x1AFFFFFF))
+        HorizontalDivider(color = BorderSubtle)
         Spacer(Modifier.height(14.dp))
         Column(
             modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
@@ -2350,19 +2351,19 @@ private fun VolumeDialog(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Volume", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White)
+                Text("Volume", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = TextPrimary)
                 Spacer(Modifier.width(8.dp))
-                Text("${volume}%", color = Color(0xFFE50914), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Text("${volume}%", color = AccentText, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
             IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.Close, "Close", tint = Color(0xFFB0B0B0), modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Close, "Close", tint = TextSecondary, modifier = Modifier.size(18.dp))
             }
         }
-        HorizontalDivider(color = Color(0x1AFFFFFF))
+        HorizontalDivider(color = BorderSubtle)
         Spacer(Modifier.height(14.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onMuteToggle) {
-                Icon(if (isMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp, null, tint = if (isMuted) Color(0xFFEF5350) else Color.White)
+                Icon(if (isMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp, null, tint = if (isMuted) ErrorColor else TextPrimary)
             }
             Slider(
                 value = volume.toFloat(),
@@ -2370,14 +2371,14 @@ private fun VolumeDialog(
                 valueRange = 0f..200f,
                 modifier = Modifier.weight(1f),
                 colors = SliderDefaults.colors(
-                    thumbColor = Color(0xFFE50914),
-                    activeTrackColor = Color(0xFFE50914),
-                    inactiveTrackColor = Color(0x33FFFFFF)
+                    thumbColor = Accent,
+                    activeTrackColor = Accent,
+                    inactiveTrackColor = BorderDefault
                 )
             )
         }
         if (volume > 100) {
-            Text("⚠ Volume above 100% may distort audio", color = Color(0xFFFFB300), fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp, top = 4.dp))
+            Text("⚠ Volume above 100% may distort audio", color = WarningColor, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp, top = 4.dp))
         }
     }
 }
@@ -2391,36 +2392,36 @@ private fun FallbackDashboard(
     onCopy: () -> Unit, onLaunchVlc: () -> Unit, onOpenBrowser: () -> Unit
 ) {
     Box(
-        modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF121212), Color(0xFF1C1C1C)))),
+        modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(SurfaceBase, SurfaceLayer))),
         contentAlignment = Alignment.Center
     ) {
-        Card(modifier = Modifier.fillMaxWidth(0.7f), colors = CardDefaults.cardColors(containerColor = Color(0xFF252525)), shape = RoundedCornerShape(24.dp)) {
+        Card(modifier = Modifier.fillMaxWidth(0.7f), colors = CardDefaults.cardColors(containerColor = SurfaceCard), shape = RoundedCornerShape(24.dp)) {
             Column(modifier = Modifier.padding(36.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Default.PlayCircle, null, tint = Color(0xFFE50914), modifier = Modifier.size(80.dp))
+                Icon(Icons.Default.PlayCircle, null, tint = AccentText, modifier = Modifier.size(80.dp))
                 Spacer(Modifier.height(16.dp))
-                Text(title, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold), color = Color.White, textAlign = TextAlign.Center)
-                if (episodeName != null) Text(episodeName, color = Color(0xFFE50914), fontSize = 13.sp)
+                Text(title, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold), color = TextPrimary, textAlign = TextAlign.Center)
+                if (episodeName != null) Text(episodeName, color = AccentText, fontSize = 13.sp)
                 Spacer(Modifier.height(8.dp))
-                Text("VLC: $errorMsg", color = Color(0xFFEF5350), fontSize = 12.sp, textAlign = TextAlign.Center)
+                Text("VLC: $errorMsg", color = ErrorColor, fontSize = 12.sp, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(24.dp))
-                Surface(modifier = Modifier.fillMaxWidth(), color = Color(0xFF1C1C1C), shape = RoundedCornerShape(12.dp)) {
+                Surface(modifier = Modifier.fillMaxWidth(), color = SurfaceLayer, shape = RoundedCornerShape(12.dp)) {
                     Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Link, null, tint = Color(0xFFE50914), modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Link, null, tint = AccentText, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text(mediaUrl, color = Color(0xFFB0B0B0), fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        Text(mediaUrl, color = TextSecondary, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                         IconButton(onClick = onCopy) {
-                            Icon(if (isCopied) Icons.Default.Check else Icons.Default.ContentCopy, null, tint = Color(0xFFE50914))
+                            Icon(if (isCopied) Icons.Default.Check else Icons.Default.ContentCopy, null, tint = AccentText)
                         }
                     }
                 }
                 Spacer(Modifier.height(24.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = onLaunchVlc, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE50914), contentColor = Color.White), shape = RoundedCornerShape(10.dp)) {
+                    Button(onClick = onLaunchVlc, colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = OnAccent), shape = RoundedCornerShape(10.dp)) {
                         Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                         Text("Launch VLC")
                     }
-                    OutlinedButton(onClick = onOpenBrowser, shape = RoundedCornerShape(10.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) {
+                    OutlinedButton(onClick = onOpenBrowser, shape = RoundedCornerShape(10.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary)) {
                         Icon(Icons.Default.OpenInNew, null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
                         Text("Browser")

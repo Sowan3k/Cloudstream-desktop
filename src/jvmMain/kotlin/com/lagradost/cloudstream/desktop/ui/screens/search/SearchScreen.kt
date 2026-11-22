@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.TextStyle
@@ -37,23 +38,13 @@ import com.lagradost.cloudstream.desktop.plugins.DesktopPluginLoader
 import com.lagradost.cloudstream.desktop.storage.DesktopDataStore
 import com.lagradost.cloudstream.desktop.ui.components.MediaCard
 import com.lagradost.cloudstream.desktop.ui.navigation.DesktopScreen
+import com.lagradost.cloudstream.desktop.ui.theme.*
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.TvType
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-
-// ─── Windows 11 Color Tokens ──────────────────────────────────────────────────
-private val SurfaceBase    = Color(0xFF1C1C1C)
-private val SurfaceLayer   = Color(0xFF242424)
-private val SurfaceCard    = Color(0xFF2C2C2C)
-private val BorderSubtle   = Color(0x18FFFFFF)
-private val BorderDefault  = Color(0x26FFFFFF)
-private val TextPrimary    = Color(0xFFFFFFFF)
-private val TextSecondary  = Color(0x99FFFFFF)
-private val TextTertiary   = Color(0x66FFFFFF)
-private val AccentBlue     = Color(0xFF0078D4)
 
 private val POPULAR_SEARCH_TAGS = listOf(
     "Solo Leveling", "Naruto", "Bleach", "One Piece",
@@ -300,13 +291,13 @@ fun SearchScreen(
                                 text = {
                                     Text(
                                         "All Providers (${apis.size})",
-                                        color = if (selectedApi == null) AccentBlue else TextPrimary,
+                                        color = if (selectedApi == null) AccentText else TextPrimary,
                                         fontSize = 13.sp,
                                         fontWeight = if (selectedApi == null) FontWeight.SemiBold else FontWeight.Normal
                                     )
                                 },
                                 leadingIcon = if (selectedApi == null) ({
-                                    Icon(Icons.Default.Check, null, tint = AccentBlue, modifier = Modifier.size(14.dp))
+                                    Icon(Icons.Default.Check, null, tint = AccentText, modifier = Modifier.size(14.dp))
                                 }) else null,
                                 onClick = {
                                     selectedApi = null
@@ -321,7 +312,7 @@ fun SearchScreen(
                                     text = {
                                         Text(
                                             api.name,
-                                            color = if (isSelected) AccentBlue else TextPrimary,
+                                            color = if (isSelected) AccentText else TextPrimary,
                                             fontSize = 13.sp,
                                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                                             maxLines = 1,
@@ -329,7 +320,7 @@ fun SearchScreen(
                                         )
                                     },
                                     leadingIcon = if (isSelected) ({
-                                        Icon(Icons.Default.Check, null, tint = AccentBlue, modifier = Modifier.size(14.dp))
+                                        Icon(Icons.Default.Check, null, tint = AccentText, modifier = Modifier.size(14.dp))
                                     }) else null,
                                     onClick = {
                                         selectedApi = api
@@ -359,7 +350,7 @@ fun SearchScreen(
                     if (isSearching) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(15.dp),
-                            color = AccentBlue,
+                            color = Accent,
                             strokeWidth = 2.dp
                         )
                     } else {
@@ -370,6 +361,7 @@ fun SearchScreen(
                         onValueChange = { DesktopSearchState.searchQuery = it },
                         singleLine = true,
                         textStyle = TextStyle(color = TextPrimary, fontSize = 13.sp),
+                        cursorBrush = SolidColor(Accent),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(onSearch = { executeSearch(searchQuery) }),
                         decorationBox = { innerTextField ->
@@ -400,8 +392,8 @@ fun SearchScreen(
                 LinearProgressIndicator(
                     progress = { searchedCount.toFloat() / totalCount.coerceAtLeast(1) },
                     modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(1.dp)).height(2.dp),
-                    color = AccentBlue,
-                    trackColor = Color.White.copy(alpha = 0.06f)
+                    color = Accent,
+                    trackColor = SurfaceCard
                 )
             }
         }
@@ -425,8 +417,8 @@ fun SearchScreen(
                     Surface(
                         onClick = { selectedType = if (isSelected && type != null) null else type },
                         shape = RoundedCornerShape(5.dp),
-                        color = if (isSelected) AccentBlue.copy(0.12f) else Color.Transparent,
-                        border = BorderStroke(1.dp, if (isSelected) AccentBlue.copy(0.5f) else BorderSubtle)
+                        color = if (isSelected) Accent.copy(0.12f) else Color.Transparent,
+                        border = BorderStroke(1.dp, if (isSelected) Accent.copy(0.5f) else BorderSubtle)
                     ) {
                         Text(
                             label,
@@ -473,7 +465,7 @@ fun SearchScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(Icons.Default.ErrorOutline, null, tint = Color(0xFFCF6679), modifier = Modifier.size(36.dp))
+                        Icon(Icons.Default.ErrorOutline, null, tint = ErrorColor, modifier = Modifier.size(36.dp))
                         Text(searchError!!, color = TextSecondary, fontSize = 13.sp)
                         Surface(
                             onClick = { executeSearch(searchQuery) },
@@ -571,7 +563,7 @@ fun SearchScreen(
                     ) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(28.dp),
-                            color = AccentBlue,
+                            color = Accent,
                             strokeWidth = 2.dp
                         )
                         Text(
@@ -629,7 +621,7 @@ fun SearchScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = AccentBlue, strokeWidth = 2.dp)
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Accent, strokeWidth = 2.dp)
                                     Text("Searching more providers ($searchedCount/$totalCount)...", color = TextTertiary, fontSize = 12.sp)
                                 }
                             }
@@ -704,7 +696,7 @@ private fun Win11SearchProviderSection(
             )
             Surface(
                 shape = RoundedCornerShape(4.dp),
-                color = Color.White.copy(alpha = 0.06f)
+                color = SurfaceCard
             ) {
                 Text(
                     providerResult.items.size.toString(),

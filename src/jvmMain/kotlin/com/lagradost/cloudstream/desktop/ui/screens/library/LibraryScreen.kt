@@ -31,22 +31,10 @@ import com.lagradost.cloudstream.desktop.storage.DesktopDataStore
 import com.lagradost.cloudstream.desktop.storage.WatchProgress
 import com.lagradost.cloudstream.desktop.storage.WatchlistItem
 import com.lagradost.cloudstream.desktop.ui.navigation.DesktopScreen
+import com.lagradost.cloudstream.desktop.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
-// ─── Windows 11 color tokens ─────────────────────────────────────────────────
-private val SurfaceBase    = Color(0xFF1C1C1C)
-private val SurfaceLayer   = Color(0xFF242424)
-private val SurfaceCard    = Color(0xFF2C2C2C)
-private val SurfaceHover   = Color(0xFF323232)
-private val BorderSubtle   = Color(0x18FFFFFF)
-private val BorderDefault  = Color(0x26FFFFFF)
-private val TextPrimary    = Color(0xFFFFFFFF)
-private val TextSecondary  = Color(0x99FFFFFF)
-private val TextTertiary   = Color(0x66FFFFFF)
-private val AccentBlue     = Color(0xFF0078D4)
-private val AccentHover    = Color(0xFF1084D8)
 
 // ─── Sort modes ───────────────────────────────────────────────────────────────
 enum class LibrarySortMode(val label: String) {
@@ -130,7 +118,7 @@ fun LibraryScreen(
                 DropdownMenu(
                     expanded = showSortMenu,
                     onDismissRequest = { showSortMenu = false },
-                    modifier = Modifier.background(Color(0xFF2C2C2C)).border(1.dp, BorderSubtle, RoundedCornerShape(8.dp))
+                    modifier = Modifier.background(SurfaceCard).border(1.dp, BorderSubtle, RoundedCornerShape(8.dp))
                 ) {
                     LibrarySortMode.entries.forEach { mode ->
                         val isSelected = sortMode == mode
@@ -138,13 +126,13 @@ fun LibraryScreen(
                             text = {
                                 Text(
                                     mode.label,
-                                    color = if (isSelected) AccentBlue else TextPrimary,
+                                    color = if (isSelected) AccentText else TextPrimary,
                                     fontSize = 13.sp,
                                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                                 )
                             },
                             leadingIcon = if (isSelected) ({
-                                Icon(Icons.Default.Check, null, tint = AccentBlue, modifier = Modifier.size(14.dp))
+                                Icon(Icons.Default.Check, null, tint = AccentText, modifier = Modifier.size(14.dp))
                             }) else null,
                             onClick = { sortMode = mode; showSortMenu = false },
                             modifier = Modifier.background(Color.Transparent)
@@ -153,8 +141,8 @@ fun LibraryScreen(
                     if (selectedTab <= 1) {
                         HorizontalDivider(color = BorderSubtle, modifier = Modifier.padding(vertical = 4.dp))
                         DropdownMenuItem(
-                            text = { Text("Clear All History", color = Color(0xFFCF6679), fontSize = 13.sp) },
-                            leadingIcon = { Icon(Icons.Default.DeleteSweep, null, tint = Color(0xFFCF6679), modifier = Modifier.size(14.dp)) },
+                            text = { Text("Clear All History", color = ErrorColor, fontSize = 13.sp) },
+                            leadingIcon = { Icon(Icons.Default.DeleteSweep, null, tint = ErrorColor, modifier = Modifier.size(14.dp)) },
                             onClick = {
                                 DesktopDataStore.clearHistory()
                                 refreshKey++
@@ -294,7 +282,7 @@ private fun Win11Tabs(
                 animationSpec = tween(150)
             )
             val underlineColor by animateColorAsState(
-                if (isSelected) AccentBlue else Color.Transparent,
+                if (isSelected) Accent else Color.Transparent,
                 animationSpec = tween(200)
             )
 
@@ -325,13 +313,13 @@ private fun Win11Tabs(
                 if (count > 0) {
                     Surface(
                         shape = RoundedCornerShape(4.dp),
-                        color = if (isSelected) AccentBlue.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.06f)
+                        color = if (isSelected) Accent.copy(alpha = 0.15f) else SurfaceCard
                     ) {
                         Text(
                             count.toString(),
                             modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
                             fontSize = 11.sp,
-                            color = if (isSelected) AccentBlue else TextTertiary,
+                            color = if (isSelected) AccentText else TextTertiary,
                             fontWeight = FontWeight.Medium
                         )
                     }
@@ -428,12 +416,12 @@ private fun HistoryCard(
                             .align(Alignment.TopStart)
                             .padding(6.dp)
                             .clip(RoundedCornerShape(4.dp))
-                            .background(Color(0xFF0078D4))
+                            .background(Accent)
                             .padding(horizontal = 5.dp, vertical = 2.dp)
                     ) {
                         Text(
                             badge,
-                            color = Color.White,
+                            color = OnAccent,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -448,8 +436,8 @@ private fun HistoryCard(
                         .align(Alignment.BottomCenter)
                         .background(
                             Brush.verticalGradient(
-                                0f to Color.Transparent,
-                                0.3f to Color.Black.copy(0.5f),
+                                0f to Color.Black.copy(0.56f),
+                                0.3f to Color.Black.copy(0.6f),
                                 1f to Color.Black.copy(0.95f)
                             )
                         )
@@ -475,7 +463,7 @@ private fun HistoryCard(
                             LinearProgressIndicator(
                                 progress = { pct },
                                 modifier = Modifier.fillMaxWidth().height(2.dp).clip(RoundedCornerShape(1.dp)),
-                                color = AccentBlue,
+                                color = MediaAccent,
                                 trackColor = Color.White.copy(0.2f)
                             )
                             Spacer(Modifier.height(3.dp))
@@ -542,8 +530,8 @@ private fun HistoryCard(
                                 onClick = { showMenu = false; onClick() }
                             )
                             DropdownMenuItem(
-                                text = { Text("Remove", color = Color(0xFFCF6679), fontSize = 13.sp) },
-                                leadingIcon = { Icon(Icons.Default.Delete, null, tint = Color(0xFFCF6679), modifier = Modifier.size(14.dp)) },
+                                text = { Text("Remove", color = ErrorColor, fontSize = 13.sp) },
+                                leadingIcon = { Icon(Icons.Default.Delete, null, tint = ErrorColor, modifier = Modifier.size(14.dp)) },
                                 onClick = { showMenu = false; onRemove() }
                             )
                         }
@@ -601,8 +589,8 @@ private fun WatchlistCard(
                         .align(Alignment.BottomCenter)
                         .background(
                             Brush.verticalGradient(
-                                0f to Color.Transparent,
-                                0.3f to Color.Black.copy(0.5f),
+                                0f to Color.Black.copy(0.56f),
+                                0.3f to Color.Black.copy(0.6f),
                                 1f to Color.Black.copy(0.95f)
                             )
                         )
@@ -676,8 +664,8 @@ private fun WatchlistCard(
                                 onClick = { showMenu = false; onClick() }
                             )
                             DropdownMenuItem(
-                                text = { Text("Remove", color = Color(0xFFCF6679), fontSize = 13.sp) },
-                                leadingIcon = { Icon(Icons.Default.BookmarkRemove, null, tint = Color(0xFFCF6679), modifier = Modifier.size(14.dp)) },
+                                text = { Text("Remove", color = ErrorColor, fontSize = 13.sp) },
+                                leadingIcon = { Icon(Icons.Default.BookmarkRemove, null, tint = ErrorColor, modifier = Modifier.size(14.dp)) },
                                 onClick = { showMenu = false; onRemove() }
                             )
                         }

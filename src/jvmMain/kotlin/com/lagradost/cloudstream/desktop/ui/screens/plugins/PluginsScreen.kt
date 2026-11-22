@@ -34,20 +34,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lagradost.cloudstream.desktop.plugins.DesktopPluginLoader
 import com.lagradost.cloudstream.desktop.storage.DesktopDataStore
+import com.lagradost.cloudstream.desktop.ui.theme.*
 import com.lagradost.cloudstream3.TvType
 import kotlinx.coroutines.launch
-
-// ─── Windows 11 Fluent Theme Color Tokens ─────────────────────────────────────
-private val SurfaceBase    = Color(0xFF1C1C1C)
-private val SurfaceLayer   = Color(0xFF242424)
-private val SurfaceCard    = Color(0xFF2C2C2C)
-private val SurfaceHover   = Color(0xFF323232)
-private val BorderSubtle   = Color(0x18FFFFFF)
-private val BorderDefault  = Color(0x26FFFFFF)
-private val TextPrimary    = Color(0xFFFFFFFF)
-private val TextSecondary  = Color(0x99FFFFFF)
-private val TextTertiary   = Color(0x66FFFFFF)
-private val AccentBlue     = Color(0xFF0078D4)
 
 private data class PresetRepo(
     val name: String,
@@ -159,11 +148,11 @@ fun PluginsScreen(
                     Button(
                         onClick = { showAddRepoDialog = true },
                         shape = RoundedCornerShape(6.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentBlue)
+                        colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = OnAccent)
                     ) {
-                        Icon(Icons.Default.Add, "Add Repo", tint = Color.White, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Add, "Add Repo", modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Add Repository", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Text("Add Repository", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -198,7 +187,7 @@ fun PluginsScreen(
                                 onValueChange = { searchQuery = it },
                                 singleLine = true,
                                 textStyle = LocalTextStyle.current.copy(color = TextPrimary, fontSize = 13.sp),
-                                cursorBrush = SolidColor(AccentBlue),
+                                cursorBrush = SolidColor(Accent),
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
@@ -225,13 +214,13 @@ fun PluginsScreen(
                     items(typeChips) { (type, label) ->
                         val isSelected = selectedTypeFilter == type
                         val textColor by animateColorAsState(if (isSelected) TextPrimary else TextSecondary, tween(150))
-                        val bgColor by animateColorAsState(if (isSelected) AccentBlue.copy(0.15f) else SurfaceLayer, tween(150))
+                        val bgColor by animateColorAsState(if (isSelected) Accent.copy(0.15f) else SurfaceLayer, tween(150))
 
                         Surface(
                             onClick = { selectedTypeFilter = type },
                             shape = RoundedCornerShape(6.dp),
                             color = bgColor,
-                            border = BorderStroke(1.dp, if (isSelected) AccentBlue.copy(0.5f) else BorderSubtle)
+                            border = BorderStroke(1.dp, if (isSelected) Accent.copy(0.5f) else BorderSubtle)
                         ) {
                             Text(
                                 label,
@@ -258,7 +247,7 @@ fun PluginsScreen(
                 ).forEach { (label, tabIndex) ->
                     val isSelected = selectedTab == tabIndex
                     val textColor by animateColorAsState(if (isSelected) TextPrimary else TextTertiary, tween(150))
-                    val underlineColor by animateColorAsState(if (isSelected) AccentBlue else Color.Transparent, tween(200))
+                    val underlineColor by animateColorAsState(if (isSelected) Accent else Color.Transparent, tween(200))
 
                     Box(
                         modifier = Modifier
@@ -296,8 +285,8 @@ fun PluginsScreen(
             if (statusMessage != null) {
                 Surface(
                     shape = RoundedCornerShape(6.dp),
-                    color = AccentBlue.copy(0.12f),
-                    border = BorderStroke(1.dp, AccentBlue.copy(0.3f)),
+                    color = Accent.copy(0.12f),
+                    border = BorderStroke(1.dp, Accent.copy(0.3f)),
                     modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
                 ) {
                     Row(
@@ -306,7 +295,7 @@ fun PluginsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Info, null, tint = AccentBlue, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Info, null, tint = AccentText, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(10.dp))
                             Text(statusMessage!!, color = TextPrimary, fontSize = 12.sp)
                         }
@@ -414,7 +403,7 @@ fun PluginsScreen(
                 shape = RoundedCornerShape(12.dp),
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.CloudDownload, null, tint = AccentBlue, modifier = Modifier.size(22.dp))
+                        Icon(Icons.Default.CloudDownload, null, tint = AccentText, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(10.dp))
                         Text("Add Extension Repository", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
@@ -439,7 +428,7 @@ fun PluginsScreen(
                                     onValueChange = { repoUrlInput = it },
                                     singleLine = true,
                                     textStyle = LocalTextStyle.current.copy(color = TextPrimary, fontSize = 13.sp),
-                                    cursorBrush = SolidColor(AccentBlue),
+                                    cursorBrush = SolidColor(Accent),
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             }
@@ -463,10 +452,10 @@ fun PluginsScreen(
                                 statusMessage = "Successfully loaded ${loaded.size} extensions!"
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+                        colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = OnAccent),
                         shape = RoundedCornerShape(6.dp)
                     ) {
-                        Text("Fetch & Add", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Fetch & Add", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 },
                 dismissButton = {
@@ -509,12 +498,12 @@ private fun ExtensionCard(
                 // Extension Plugin Icon Badge
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = AccentBlue.copy(0.15f),
-                    border = BorderStroke(1.dp, AccentBlue.copy(0.3f)),
+                    color = Accent.copy(0.15f),
+                    border = BorderStroke(1.dp, Accent.copy(0.3f)),
                     modifier = Modifier.size(42.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Extension, null, tint = AccentBlue, modifier = Modifier.size(22.dp))
+                        Icon(Icons.Default.Extension, null, tint = AccentText, modifier = Modifier.size(22.dp))
                     }
                 }
 
@@ -532,14 +521,14 @@ private fun ExtensionCard(
                         // Active Badge
                         Surface(
                             shape = RoundedCornerShape(4.dp),
-                            color = Color(0xFF107C41).copy(0.15f),
+                            color = Color(0xFF107C41),
                             border = BorderStroke(1.dp, Color(0xFF107C41).copy(0.4f))
                         ) {
                             Text(
                                 "Active",
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
                                 fontSize = 10.sp,
-                                color = Color(0xFF107C41),
+                                color = Color.White,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -623,7 +612,7 @@ private fun RepositoryCard(
                     modifier = Modifier.size(38.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Dns, null, tint = AccentBlue, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Dns, null, tint = AccentText, modifier = Modifier.size(18.dp))
                     }
                 }
 
@@ -652,7 +641,7 @@ private fun RepositoryCard(
                     Icon(Icons.Default.Refresh, "Sync Repository", tint = TextSecondary, modifier = Modifier.size(16.dp))
                 }
                 IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Delete, "Remove Repository", tint = Color(0xFFCF6679), modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Delete, "Remove Repository", tint = ErrorColor, modifier = Modifier.size(16.dp))
                 }
             }
         }
@@ -687,15 +676,15 @@ private fun PresetRepoCard(
             ) {
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = if (preset.isRecommended) AccentBlue.copy(0.15f) else SurfaceLayer,
-                    border = BorderStroke(1.dp, if (preset.isRecommended) AccentBlue.copy(0.3f) else BorderSubtle),
+                    color = if (preset.isRecommended) Accent.copy(0.15f) else SurfaceLayer,
+                    border = BorderStroke(1.dp, if (preset.isRecommended) Accent.copy(0.3f) else BorderSubtle),
                     modifier = Modifier.size(40.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             if (preset.isRecommended) Icons.Default.Star else Icons.Default.CloudDownload,
                             null,
-                            tint = if (preset.isRecommended) AccentBlue else TextSecondary,
+                            tint = if (preset.isRecommended) AccentText else TextSecondary,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -715,14 +704,14 @@ private fun PresetRepoCard(
                             Spacer(Modifier.width(8.dp))
                             Surface(
                                 shape = RoundedCornerShape(4.dp),
-                                color = AccentBlue.copy(0.15f),
-                                border = BorderStroke(1.dp, AccentBlue.copy(0.4f))
+                                color = Accent.copy(0.15f),
+                                border = BorderStroke(1.dp, Accent.copy(0.4f))
                             ) {
                                 Text(
                                     "Recommended",
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
                                     fontSize = 10.sp,
-                                    color = AccentBlue,
+                                    color = AccentText,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -746,28 +735,28 @@ private fun PresetRepoCard(
             if (isAdded) {
                 Surface(
                     shape = RoundedCornerShape(6.dp),
-                    color = Color(0xFF107C41).copy(0.15f),
+                    color = Color(0xFF107C41),
                     border = BorderStroke(1.dp, Color(0xFF107C41).copy(0.4f))
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Check, null, tint = Color(0xFF107C41), modifier = Modifier.size(14.dp))
+                        Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("Added", fontSize = 11.sp, color = Color(0xFF107C41), fontWeight = FontWeight.Bold)
+                        Text("Added", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             } else {
                 Button(
                     onClick = onAdd,
                     shape = RoundedCornerShape(6.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+                    colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = OnAccent),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 ) {
-                    Icon(Icons.Default.Add, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                    Icon(Icons.Default.Add, null, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Add Repo", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text("Add Repo", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }

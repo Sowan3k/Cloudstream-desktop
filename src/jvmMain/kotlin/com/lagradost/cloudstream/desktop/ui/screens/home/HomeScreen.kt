@@ -23,7 +23,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -38,6 +37,7 @@ import com.lagradost.cloudstream.desktop.storage.DesktopDataStore
 import com.lagradost.cloudstream.desktop.storage.WatchProgress
 import com.lagradost.cloudstream.desktop.ui.components.*
 import com.lagradost.cloudstream.desktop.ui.navigation.DesktopScreen
+import com.lagradost.cloudstream.desktop.ui.theme.*
 import com.lagradost.cloudstream3.HomePageList
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MainPageRequest
@@ -53,17 +53,6 @@ import java.net.URI
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
-// ─── Win11 Design Tokens ──────────────────────────────────────────────────────
-private val BgBase       = Color(0xFF1C1C1C)
-private val BgLayer      = Color(0xFF242424)
-private val BgCard       = Color(0xFF2C2C2C)
-private val BorderSubtle = Color(0x18FFFFFF)
-private val BorderDef    = Color(0x26FFFFFF)
-private val TxtPrimary   = Color(0xFFFFFFFF)
-private val TxtSecondary = Color(0x99FFFFFF)
-private val TxtTertiary  = Color(0x66FFFFFF)
-private val Accent       = Color(0xFF0078D4)
 
 @Composable
 fun HomeScreen(
@@ -138,7 +127,7 @@ fun HomeScreen(
         }
     }
 
-    Box(modifier = modifier.fillMaxSize().background(BgBase)) {
+    Box(modifier = modifier.fillMaxSize().background(SurfaceBase)) {
         if (registeredApis.isEmpty()) {
             Win11NoProviders(onNavigate)
         } else {
@@ -272,13 +261,13 @@ private fun Win11HomeHeader(
                 "Home",
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 22.sp,
-                color = TxtPrimary
+                color = TextPrimary
             )
             if (selectedApi != null) {
                 Text(
                     selectedApi.name,
                     fontSize = 12.sp,
-                    color = TxtTertiary
+                    color = TextTertiary
                 )
             }
         }
@@ -299,7 +288,7 @@ private fun Win11HomeHeader(
                 DropdownMenu(
                     expanded = providerDropdown,
                     onDismissRequest = { providerDropdown = false },
-                    modifier = Modifier.background(BgCard).border(1.dp, BorderSubtle, RoundedCornerShape(6.dp))
+                    modifier = Modifier.background(SurfaceCard).border(1.dp, BorderSubtle, RoundedCornerShape(6.dp))
                 ) {
                     registeredApis.forEach { api ->
                         val isSelected = api == selectedApi
@@ -307,13 +296,13 @@ private fun Win11HomeHeader(
                             text = {
                                 Text(
                                     api.name,
-                                    color = if (isSelected) Accent else TxtPrimary,
+                                    color = if (isSelected) AccentText else TextPrimary,
                                     fontSize = 13.sp,
                                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                                 )
                             },
                             leadingIcon = if (isSelected) ({
-                                Icon(Icons.Default.Check, null, tint = Accent, modifier = Modifier.size(13.dp))
+                                Icon(Icons.Default.Check, null, tint = AccentText, modifier = Modifier.size(13.dp))
                             }) else null,
                             onClick = { onProviderSelected(api); providerDropdown = false }
                         )
@@ -323,7 +312,7 @@ private fun Win11HomeHeader(
 
             // Icon buttons
             Win11IconButton(icon = Icons.Default.Refresh, tooltip = "Reload", onClick = onReload)
-            Win11IconButton(icon = Icons.Default.Casino, tooltip = "Surprise me", tint = Accent, onClick = onRandom)
+            Win11IconButton(icon = Icons.Default.Casino, tooltip = "Surprise me", tint = AccentText, onClick = onRandom)
             Win11IconButton(icon = Icons.Default.Search, tooltip = "Search", onClick = onSearch)
         }
     }
@@ -339,7 +328,7 @@ private fun Win11SmallButton(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(6.dp),
-        color = BgLayer,
+        color = SurfaceLayer,
         border = BorderStroke(1.dp, BorderSubtle),
         modifier = Modifier.height(30.dp)
     ) {
@@ -353,17 +342,17 @@ private fun Win11SmallButton(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Icon(icon, null, tint = TxtSecondary, modifier = Modifier.size(13.5.dp))
+                Icon(icon, null, tint = TextSecondary, modifier = Modifier.size(13.5.dp))
                 Text(
                     label,
-                    color = TxtSecondary,
+                    color = TextSecondary,
                     fontSize = 12.sp,
                     lineHeight = 12.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.widthIn(max = 140.dp).offset(y = (-1).dp)
                 )
-                Icon(Icons.Default.KeyboardArrowDown, null, tint = TxtTertiary, modifier = Modifier.size(12.dp))
+                Icon(Icons.Default.KeyboardArrowDown, null, tint = TextTertiary, modifier = Modifier.size(12.dp))
             }
         }
     }
@@ -374,7 +363,7 @@ private fun Win11SmallButton(
 private fun Win11IconButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     tooltip: String,
-    tint: Color = TxtSecondary,
+    tint: Color = TextSecondary,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -383,7 +372,7 @@ private fun Win11IconButton(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(6.dp),
-        color = if (hovered) BgLayer else Color.Transparent,
+        color = if (hovered) SurfaceHover else Color.Transparent,
         border = if (hovered) BorderStroke(1.dp, BorderSubtle) else null,
         modifier = Modifier.size(32.dp).hoverable(interactionSource)
     ) {
@@ -432,7 +421,7 @@ private fun Win11HeroBanner(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
                 error = {
-                    Box(modifier = Modifier.fillMaxSize().background(BgLayer))
+                    Box(modifier = Modifier.fillMaxSize().background(SurfaceLayer))
                 }
             )
 
@@ -459,7 +448,7 @@ private fun Win11HeroBanner(
                         .height(200.dp)
                         .clickable { onDetailsClick(item) },
                     shape = RoundedCornerShape(10.dp),
-                    color = BgCard,
+                    color = SurfaceCard,
                     border = BorderStroke(1.dp, Color.White.copy(0.3f))
                 ) {
                     SubcomposeAsyncImage(
@@ -469,10 +458,10 @@ private fun Win11HeroBanner(
                         contentScale = ContentScale.Crop,
                         error = {
                             Box(
-                                modifier = Modifier.fillMaxSize().background(BgLayer),
+                                modifier = Modifier.fillMaxSize().background(SurfaceLayer),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.Movie, null, tint = TxtTertiary, modifier = Modifier.size(36.dp))
+                                Icon(Icons.Default.Movie, null, tint = TextTertiary, modifier = Modifier.size(36.dp))
                             }
                         }
                     )
@@ -509,7 +498,7 @@ private fun Win11HeroBanner(
                                     fontSize = 10.sp,
                                     lineHeight = 10.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = OnAccent
                                 )
                             }
                         }
@@ -542,7 +531,7 @@ private fun Win11HeroBanner(
                         genreText,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Accent
+                        color = MediaAccent
                     )
 
                     Spacer(Modifier.height(6.dp))
@@ -567,7 +556,7 @@ private fun Win11HeroBanner(
                         Surface(
                             onClick = { onPlayClick(item) },
                             shape = RoundedCornerShape(6.dp),
-                            color = Color.White,
+                            color = Accent,
                             modifier = Modifier.height(34.dp)
                         ) {
                             Box(
@@ -580,8 +569,8 @@ private fun Win11HeroBanner(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
-                                    Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(17.dp))
-                                    Text("Play Stream", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 13.sp, lineHeight = 13.sp)
+                                    Icon(Icons.Default.PlayArrow, null, tint = OnAccent, modifier = Modifier.size(17.dp))
+                                    Text("Play Stream", color = OnAccent, fontWeight = FontWeight.Bold, fontSize = 13.sp, lineHeight = 13.sp)
                                 }
                             }
                         }
@@ -625,7 +614,7 @@ private fun Win11HeroBanner(
                             .animateContentSize()
                             .size(if (isActive) 18.dp else 5.dp, 5.dp)
                             .clip(RoundedCornerShape(3.dp))
-                            .background(if (isActive) Accent else Color.White.copy(0.35f))
+                            .background(if (isActive) MediaAccent else Color.White.copy(0.35f))
                             .clickable { currentIndex = i }
                     )
                 }
@@ -659,14 +648,14 @@ private fun Win11TypeFilter(
         types.forEach { (type, label) ->
             val isSelected = selected == type
             val textColor by animateColorAsState(
-                if (isSelected) Color.White else TxtTertiary, tween(150)
+                if (isSelected) AccentText else TextSecondary, tween(150)
             )
 
             Surface(
                 onClick = { onSelect(type) },
                 shape = RoundedCornerShape(6.dp),
-                color = if (isSelected) Accent.copy(0.15f) else Color.White.copy(0.04f),
-                border = BorderStroke(1.dp, if (isSelected) Accent.copy(0.6f) else BorderSubtle)
+                color = if (isSelected) Accent.copy(0.15f) else SurfaceLayer,
+                border = BorderStroke(1.dp, if (isSelected) Accent else BorderSubtle)
             ) {
                 Box(
                     modifier = Modifier
@@ -797,7 +786,7 @@ private fun Win11SectionHeader(title: String) {
         modifier = Modifier.padding(start = 28.dp, end = 28.dp, bottom = 10.dp),
         fontSize = 14.sp,
         fontWeight = FontWeight.SemiBold,
-        color = TxtPrimary
+        color = TextPrimary
     )
 }
 
@@ -815,8 +804,8 @@ private fun Win11ContinueCard(
         Surface(
             onClick = onClick,
             shape = RoundedCornerShape(8.dp),
-            color = BgCard,
-            border = BorderStroke(1.dp, if (hovered) BorderDef else BorderSubtle),
+            color = SurfaceCard,
+            border = BorderStroke(1.dp, if (hovered) BorderDefault else BorderSubtle),
             modifier = Modifier.width(210.dp).height(118.dp).hoverable(interactionSource)
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
@@ -826,17 +815,17 @@ private fun Win11ContinueCard(
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
-                        error = { Box(Modifier.fillMaxSize().background(BgLayer)) }
+                        error = { Box(Modifier.fillMaxSize().background(SurfaceLayer)) }
                     )
                 } else {
-                    Box(Modifier.fillMaxSize().background(BgLayer))
+                    Box(Modifier.fillMaxSize().background(SurfaceLayer))
                 }
 
                 // Overlay
                 Box(modifier = Modifier.fillMaxSize().background(
                     Brush.verticalGradient(
-                        0f to Color.Black.copy(0.2f),
-                        0.5f to Color.Black.copy(0.55f),
+                        0f to Color.Black.copy(0.58f),
+                        0.5f to Color.Black.copy(0.68f),
                         1f to Color.Black.copy(0.92f)
                     )
                 ))
@@ -862,7 +851,7 @@ private fun Win11ContinueCard(
                         LinearProgressIndicator(
                             progress = { pct },
                             modifier = Modifier.fillMaxWidth().height(2.dp).clip(RoundedCornerShape(1.dp)),
-                            color = Accent,
+                            color = MediaAccent,
                             trackColor = Color.White.copy(0.2f)
                         )
                         Spacer(Modifier.height(3.dp))
@@ -904,15 +893,15 @@ private fun Win11Shimmer() {
     )
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 28.dp)) {
         // Hero
-        Box(modifier = Modifier.fillMaxWidth().height(340.dp).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha)))
+        Box(modifier = Modifier.fillMaxWidth().height(340.dp).clip(RoundedCornerShape(10.dp)).background(TextPrimary.copy(alpha)))
         Spacer(Modifier.height(24.dp))
         // Row label
-        Box(modifier = Modifier.width(120.dp).height(14.dp).clip(RoundedCornerShape(3.dp)).background(Color.White.copy(alpha)))
+        Box(modifier = Modifier.width(120.dp).height(14.dp).clip(RoundedCornerShape(3.dp)).background(TextPrimary.copy(alpha)))
         Spacer(Modifier.height(10.dp))
         // Cards row
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             repeat(6) {
-                Box(modifier = Modifier.width(135.dp).height(195.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha)))
+                Box(modifier = Modifier.width(135.dp).height(195.dp).clip(RoundedCornerShape(8.dp)).background(TextPrimary.copy(alpha)))
             }
         }
     }
@@ -933,18 +922,18 @@ private fun Win11ErrorState(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Icon(Icons.Default.ErrorOutline, null, tint = Color(0xFFCF6679), modifier = Modifier.size(36.dp))
-            Text(message, color = TxtSecondary, fontSize = 13.sp, maxLines = 2)
+            Icon(Icons.Default.ErrorOutline, null, tint = ErrorColor, modifier = Modifier.size(36.dp))
+            Text(message, color = TextSecondary, fontSize = 13.sp, maxLines = 2)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Surface(
                     onClick = onRetry,
                     shape = RoundedCornerShape(6.dp),
-                    color = BgLayer,
+                    color = SurfaceLayer,
                     border = BorderStroke(1.dp, BorderSubtle)
                 ) {
                     Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Refresh, null, tint = TxtSecondary, modifier = Modifier.size(14.dp))
-                        Text("Retry", color = TxtSecondary, fontSize = 12.sp)
+                        Icon(Icons.Default.Refresh, null, tint = TextSecondary, modifier = Modifier.size(14.dp))
+                        Text("Retry", color = TextSecondary, fontSize = 12.sp)
                     }
                 }
                 if (mainUrl != null) {
@@ -955,8 +944,8 @@ private fun Win11ErrorState(
                         border = BorderStroke(1.dp, BorderSubtle)
                     ) {
                         Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Public, null, tint = TxtTertiary, modifier = Modifier.size(13.dp))
-                            Text("Open in Browser", color = TxtTertiary, fontSize = 12.sp)
+                            Icon(Icons.Default.Public, null, tint = TextTertiary, modifier = Modifier.size(13.dp))
+                            Text("Open in Browser", color = TextTertiary, fontSize = 12.sp)
                         }
                     }
                 }
@@ -974,12 +963,12 @@ private fun Win11NoProviders(onNavigate: (DesktopScreen) -> Unit) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.padding(40.dp)
         ) {
-            Icon(Icons.Default.Extension, null, tint = TxtTertiary, modifier = Modifier.size(44.dp))
+            Icon(Icons.Default.Extension, null, tint = TextTertiary, modifier = Modifier.size(44.dp))
             Spacer(Modifier.height(4.dp))
-            Text("No Providers Installed", fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = TxtPrimary)
+            Text("No Providers Installed", fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = TextPrimary)
             Text(
                 "Install a plugin extension to browse content.",
-                color = TxtTertiary, fontSize = 13.sp
+                color = TextTertiary, fontSize = 13.sp
             )
             Spacer(Modifier.height(8.dp))
             Surface(
@@ -992,8 +981,8 @@ private fun Win11NoProviders(onNavigate: (DesktopScreen) -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.Extension, null, tint = Color.White, modifier = Modifier.size(15.dp))
-                    Text("Browse Extensions", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    Icon(Icons.Default.Extension, null, tint = OnAccent, modifier = Modifier.size(15.dp))
+                    Text("Browse Extensions", color = OnAccent, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                 }
             }
         }

@@ -21,24 +21,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lagradost.cloudstream.desktop.storage.DesktopDataStore
-
-// ─── Windows 11 Fluent Theme Color Tokens ─────────────────────────────────────
-private val SurfaceBase    = Color(0xFF1C1C1C)
-private val SurfaceLayer   = Color(0xFF242424)
-private val SurfaceCard    = Color(0xFF2C2C2C)
-private val SurfaceHover   = Color(0xFF323232)
-private val BorderSubtle   = Color(0x18FFFFFF)
-private val BorderDefault  = Color(0x26FFFFFF)
-private val TextPrimary    = Color(0xFFFFFFFF)
-private val TextSecondary  = Color(0x99FFFFFF)
-private val TextTertiary   = Color(0x66FFFFFF)
-private val AccentBlue     = Color(0xFF0078D4)
+import com.lagradost.cloudstream.desktop.ui.theme.*
 
 @Composable
 fun SettingsScreen(
@@ -78,8 +66,8 @@ fun SettingsScreen(
             if (statusNotification != null) {
                 Surface(
                     shape = RoundedCornerShape(6.dp),
-                    color = AccentBlue.copy(0.12f),
-                    border = BorderStroke(1.dp, AccentBlue.copy(0.3f)),
+                    color = Accent.copy(0.12f),
+                    border = BorderStroke(1.dp, Accent.copy(0.3f)),
                     modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
                 ) {
                     Row(
@@ -88,7 +76,7 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.CheckCircle, null, tint = AccentBlue, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.CheckCircle, null, tint = AccentText, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(10.dp))
                             Text(statusNotification!!, color = TextPrimary, fontSize = 12.sp)
                         }
@@ -260,10 +248,13 @@ fun SettingsScreen(
                             showClearHistoryDialog = false
                             statusNotification = "Watch history cleared successfully!"
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFCF6679)),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = ErrorColor,
+                            contentColor = MaterialTheme.colorScheme.onError
+                        ),
                         shape = RoundedCornerShape(6.dp)
                     ) {
-                        Text("Clear All History", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Clear All History", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 },
                 dismissButton = {
@@ -289,10 +280,13 @@ fun SettingsScreen(
                             showClearWatchlistDialog = false
                             statusNotification = "Watchlist cleared successfully!"
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFCF6679)),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = ErrorColor,
+                            contentColor = MaterialTheme.colorScheme.onError
+                        ),
                         shape = RoundedCornerShape(6.dp)
                     ) {
-                        Text("Clear Watchlist", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Clear Watchlist", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 },
                 dismissButton = {
@@ -319,7 +313,7 @@ private fun SettingsSection(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.padding(bottom = 8.dp)
         ) {
-            Icon(icon, null, tint = AccentBlue, modifier = Modifier.size(18.dp))
+            Icon(icon, null, tint = AccentText, modifier = Modifier.size(18.dp))
             Text(title, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = TextPrimary)
         }
         Surface(
@@ -356,8 +350,8 @@ private fun SettingSwitchRow(
             checked = checked,
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = AccentBlue,
+                checkedThumbColor = OnAccent,
+                checkedTrackColor = Accent,
                 uncheckedThumbColor = TextSecondary,
                 uncheckedTrackColor = SurfaceLayer
             )
@@ -398,9 +392,9 @@ private fun SettingDropdownRow(
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(value, color = AccentBlue, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text(value, color = AccentText, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     Spacer(Modifier.width(4.dp))
-                    Icon(Icons.Default.ArrowDropDown, null, tint = AccentBlue, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.ArrowDropDown, null, tint = AccentText, modifier = Modifier.size(16.dp))
                 }
             }
         }
@@ -437,15 +431,15 @@ private fun SettingActionRow(
             onClick = onClick,
             shape = RoundedCornerShape(6.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (isDestructive) Color(0xFFCF6679).copy(0.15f) else AccentBlue.copy(0.15f)
+                containerColor = if (isDestructive) ErrorColor.copy(0.15f) else Accent.copy(0.15f)
             ),
-            border = BorderStroke(1.dp, if (isDestructive) Color(0xFFCF6679).copy(0.4f) else AccentBlue.copy(0.4f)),
+            border = BorderStroke(1.dp, if (isDestructive) ErrorColor.copy(0.4f) else Accent.copy(0.4f)),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
         ) {
             Text(
                 actionLabel,
                 fontSize = 11.sp,
-                color = if (isDestructive) Color(0xFFCF6679) else AccentBlue,
+                color = if (isDestructive) ErrorColor else AccentText,
                 fontWeight = FontWeight.SemiBold
             )
         }

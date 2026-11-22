@@ -1,5 +1,8 @@
 package com.lagradost.cloudstream.desktop.storage
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -53,7 +56,7 @@ object DesktopDataStore {
         File(storageDir, "settings.json")
     }
 
-    var currentSettings: AppSettings = loadSettings()
+    var currentSettings: AppSettings by mutableStateOf(loadSettings())
         private set
 
     fun loadSettings(): AppSettings {

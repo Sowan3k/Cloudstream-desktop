@@ -41,23 +41,12 @@ import com.lagradost.cloudstream.desktop.storage.WatchlistItem
 import com.lagradost.cloudstream.desktop.ui.components.MediaCard
 import com.lagradost.cloudstream.desktop.ui.navigation.DesktopScreen
 import com.lagradost.cloudstream.desktop.ui.navigation.SubtitleTrackInfo
+import com.lagradost.cloudstream.desktop.ui.theme.*
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-// ─── Windows 11 Color Tokens ──────────────────────────────────────────────────
-private val SurfaceBase    = Color(0xFF1C1C1C)
-private val SurfaceLayer   = Color(0xFF242424)
-private val SurfaceCard    = Color(0xFF2C2C2C)
-private val SurfaceHover   = Color(0xFF323232)
-private val BorderSubtle   = Color(0x18FFFFFF)
-private val BorderDefault  = Color(0x26FFFFFF)
-private val TextPrimary    = Color(0xFFFFFFFF)
-private val TextSecondary  = Color(0x99FFFFFF)
-private val TextTertiary   = Color(0x66FFFFFF)
-private val AccentBlue     = Color(0xFF0078D4)
 
 @Composable
 fun ResultScreen(
@@ -341,15 +330,14 @@ fun ResultScreen(
                                 }
                             )
 
-                            // Win11 Dark Gradient overlay
+                            // Keep the hero content on a dark scrim in both themes.
                             Box(
                                 modifier = Modifier.fillMaxSize().background(
                                     Brush.verticalGradient(
-                                        listOf(
-                                            Color.Black.copy(alpha = 0.5f),
-                                            Color.Black.copy(alpha = 0.75f),
-                                            SurfaceBase
-                                        )
+                                        0f to Color.Black.copy(alpha = 0.75f),
+                                        0.5f to Color.Black.copy(alpha = 0.8f),
+                                        0.95f to Color.Black.copy(alpha = 0.9f),
+                                        1f to SurfaceBase
                                     )
                                 )
                             )
@@ -419,7 +407,7 @@ fun ResultScreen(
                                     Text(
                                         text = res.name,
                                         style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = TextPrimary,
+                                        color = Color.White,
                                         maxLines = 2,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -429,7 +417,7 @@ fun ResultScreen(
                                         Spacer(Modifier.height(4.dp))
                                         Text(
                                             text = res.tags!!.take(4).joinToString("  •  "),
-                                            color = AccentBlue,
+                                            color = MediaAccent,
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Medium
                                         )
@@ -441,7 +429,7 @@ fun ResultScreen(
                                     res.plot?.let { plot ->
                                         Text(
                                             text = plot,
-                                            color = TextSecondary,
+                                            color = Color.White.copy(alpha = 0.75f),
                                             fontSize = 13.sp,
                                             maxLines = 3,
                                             overflow = TextOverflow.Ellipsis,
@@ -457,7 +445,7 @@ fun ResultScreen(
                                             Surface(
                                                 onClick = { extractAndPlay(null) },
                                                 shape = RoundedCornerShape(6.dp),
-                                                color = Color.White,
+                                                color = Accent,
                                                 modifier = Modifier.height(34.dp)
                                             ) {
                                                 Row(
@@ -466,11 +454,11 @@ fun ResultScreen(
                                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                                 ) {
                                                     if (isExtractingLinks) {
-                                                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.Black, strokeWidth = 2.dp)
+                                                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = OnAccent, strokeWidth = 2.dp)
                                                     } else {
-                                                        Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                                                        Icon(Icons.Default.PlayArrow, null, tint = OnAccent, modifier = Modifier.size(18.dp))
                                                     }
-                                                    Text("Play Movie", color = Color.Black, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                                    Text("Play Movie", color = OnAccent, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                                                 }
                                             }
                                         } else if (res is TvSeriesLoadResponse) {
@@ -487,7 +475,7 @@ fun ResultScreen(
                                             Surface(
                                                 onClick = { epToPlay?.let { extractAndPlay(it) } },
                                                 shape = RoundedCornerShape(6.dp),
-                                                color = Color.White,
+                                                color = Accent,
                                                 modifier = Modifier.height(34.dp)
                                             ) {
                                                 Row(
@@ -496,16 +484,16 @@ fun ResultScreen(
                                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                                 ) {
                                                     if (isExtractingLinks) {
-                                                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.Black, strokeWidth = 2.dp)
+                                                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = OnAccent, strokeWidth = 2.dp)
                                                     } else {
-                                                        Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                                                        Icon(Icons.Default.PlayArrow, null, tint = OnAccent, modifier = Modifier.size(18.dp))
                                                     }
                                                     val epLabel = if (epToPlay != null) {
                                                         val s = epToPlay.season ?: 1
                                                         val e = epToPlay.episode ?: 1
                                                         if (historyMatch != null) "Resume S${s}E${e}" else "Play S${s}E${e}"
                                                     } else "Play"
-                                                    Text(epLabel, color = Color.Black, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                                    Text(epLabel, color = OnAccent, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                                                 }
                                             }
                                         }
@@ -532,8 +520,8 @@ fun ResultScreen(
                                                 }
                                             },
                                             shape = RoundedCornerShape(6.dp),
-                                            color = if (isInWatchlist) AccentBlue.copy(0.15f) else Color.White.copy(0.12f),
-                                            border = BorderStroke(1.dp, if (isInWatchlist) AccentBlue.copy(0.5f) else BorderSubtle),
+                                            color = if (isInWatchlist) MaterialTheme.colorScheme.primaryContainer else SurfaceCard,
+                                            border = BorderStroke(1.dp, if (isInWatchlist) Accent.copy(0.5f) else BorderSubtle),
                                             modifier = Modifier.height(34.dp)
                                         ) {
                                             Row(
@@ -544,12 +532,12 @@ fun ResultScreen(
                                                 Icon(
                                                     if (isInWatchlist) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
                                                     null,
-                                                    tint = if (isInWatchlist) AccentBlue else TextPrimary,
+                                                    tint = if (isInWatchlist) AccentText else TextPrimary,
                                                     modifier = Modifier.size(16.dp)
                                                 )
                                                 Text(
                                                     if (isInWatchlist) "Bookmarked" else "Watchlist",
-                                                    color = if (isInWatchlist) AccentBlue else TextPrimary,
+                                                    color = if (isInWatchlist) AccentText else TextPrimary,
                                                     fontSize = 13.sp,
                                                     fontWeight = if (isInWatchlist) FontWeight.SemiBold else FontWeight.Normal
                                                 )
@@ -578,8 +566,8 @@ fun ResultScreen(
                                         Surface(
                                             onClick = { selectedSeason = season },
                                             shape = RoundedCornerShape(5.dp),
-                                            color = if (isSelected) AccentBlue.copy(0.12f) else Color.Transparent,
-                                            border = BorderStroke(1.dp, if (isSelected) AccentBlue.copy(0.5f) else BorderSubtle)
+                                            color = if (isSelected) Accent.copy(0.12f) else Color.Transparent,
+                                            border = BorderStroke(1.dp, if (isSelected) Accent.copy(0.5f) else BorderSubtle)
                                         ) {
                                             Text(
                                                 "Season $season",
@@ -648,8 +636,8 @@ fun ResultScreen(
                                                 selectedSeason = newEps.mapNotNull { it.season }.minOrNull()
                                             },
                                             shape = RoundedCornerShape(5.dp),
-                                            color = if (isSelected) AccentBlue.copy(0.12f) else Color.Transparent,
-                                            border = BorderStroke(1.dp, if (isSelected) AccentBlue.copy(0.5f) else BorderSubtle)
+                                            color = if (isSelected) Accent.copy(0.12f) else Color.Transparent,
+                                            border = BorderStroke(1.dp, if (isSelected) Accent.copy(0.5f) else BorderSubtle)
                                         ) {
                                             Text(
                                                 label,
@@ -682,8 +670,8 @@ fun ResultScreen(
                                         Surface(
                                             onClick = { selectedSeason = season },
                                             shape = RoundedCornerShape(5.dp),
-                                            color = if (isSelected) AccentBlue.copy(0.12f) else Color.Transparent,
-                                            border = BorderStroke(1.dp, if (isSelected) AccentBlue.copy(0.5f) else BorderSubtle)
+                                            color = if (isSelected) Accent.copy(0.12f) else Color.Transparent,
+                                            border = BorderStroke(1.dp, if (isSelected) Accent.copy(0.5f) else BorderSubtle)
                                         ) {
                                             Text(
                                                 "Season $season",
@@ -799,7 +787,7 @@ fun ResultScreen(
                         modifier = Modifier.padding(horizontal = 32.dp, vertical = 24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = AccentBlue, strokeWidth = 2.dp)
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Accent, strokeWidth = 2.dp)
                         Spacer(Modifier.height(14.dp))
                         Text("Finding stream links...", color = TextPrimary, fontSize = 13.sp)
                     }
@@ -822,12 +810,12 @@ private fun Win11IconButton(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(6.dp),
-        color = if (hovered) SurfaceHover else Color.Black.copy(0.45f),
-        border = BorderStroke(1.dp, if (hovered) BorderDefault else BorderSubtle),
+        color = Color.Black.copy(alpha = if (hovered) 0.75f else 0.45f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = if (hovered) 0.3f else 0.15f)),
         modifier = Modifier.size(32.dp).hoverable(interactionSource)
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Icon(icon, tooltip, tint = TextPrimary, modifier = Modifier.size(16.dp))
+            Icon(icon, tooltip, tint = Color.White, modifier = Modifier.size(16.dp))
         }
     }
 }
@@ -838,13 +826,13 @@ private fun Win11InfoChip(label: String, isAccent: Boolean = false) {
     Surface(
         shape = RoundedCornerShape(4.dp),
         color = if (isAccent) Color(0xFFFFD700).copy(alpha = 0.15f) else Color.White.copy(alpha = 0.08f),
-        border = BorderStroke(1.dp, if (isAccent) Color(0xFFFFD700).copy(alpha = 0.3f) else BorderSubtle)
+        border = BorderStroke(1.dp, if (isAccent) Color(0xFFFFD700).copy(alpha = 0.3f) else Color.White.copy(alpha = 0.15f))
     ) {
         Text(
             label,
             modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
             fontSize = 11.sp,
-            color = if (isAccent) Color(0xFFFFD700) else TextSecondary,
+            color = if (isAccent) Color(0xFFFFD700) else Color.White.copy(alpha = 0.85f),
             fontWeight = FontWeight.Medium
         )
     }
@@ -877,16 +865,16 @@ private fun Win11EpisodeRow(
             // Episode Number Badge
             Surface(
                 shape = RoundedCornerShape(4.dp),
-                color = AccentBlue.copy(alpha = 0.12f),
+                color = Accent.copy(alpha = 0.12f),
                 modifier = Modifier.size(36.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     if (isExtracting) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = AccentBlue, strokeWidth = 2.dp)
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Accent, strokeWidth = 2.dp)
                     } else {
                         Text(
                             text = "${episode.episode ?: (index + 1)}",
-                            color = AccentBlue,
+                            color = AccentText,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 13.sp
                         )
@@ -924,7 +912,7 @@ private fun Win11EpisodeRow(
             Icon(
                 Icons.Default.PlayArrow,
                 null,
-                tint = if (hovered) AccentBlue else TextTertiary,
+                tint = if (hovered) AccentText else TextTertiary,
                 modifier = Modifier.size(20.dp)
             )
         }
@@ -986,7 +974,7 @@ private fun Win11LoadingState() {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            CircularProgressIndicator(modifier = Modifier.size(28.dp), color = AccentBlue, strokeWidth = 2.dp)
+            CircularProgressIndicator(modifier = Modifier.size(28.dp), color = Accent, strokeWidth = 2.dp)
             Text("Loading media details...", color = TextTertiary, fontSize = 13.sp)
         }
     }
@@ -999,7 +987,7 @@ private fun Win11ResumingState() {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            CircularProgressIndicator(modifier = Modifier.size(32.dp), color = AccentBlue, strokeWidth = 2.dp)
+            CircularProgressIndicator(modifier = Modifier.size(32.dp), color = Accent, strokeWidth = 2.dp)
             Text("Resuming playback...", color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
             Text("Fetching stream links", color = TextTertiary, fontSize = 12.sp)
         }
@@ -1014,7 +1002,7 @@ private fun Win11ErrorState(message: String, onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.padding(32.dp)
         ) {
-            Icon(Icons.Default.ErrorOutline, null, tint = Color(0xFFCF6679), modifier = Modifier.size(40.dp))
+            Icon(Icons.Default.ErrorOutline, null, tint = ErrorColor, modifier = Modifier.size(40.dp))
             Text(message, color = TextSecondary, fontSize = 13.sp)
             Surface(
                 onClick = onBack,

@@ -29,6 +29,7 @@ import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
 import coil3.compose.SubcomposeAsyncImage
 import com.lagradost.cloudstream.desktop.storage.WatchProgress
+import com.lagradost.cloudstream.desktop.ui.theme.*
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.TvType
 import kotlinx.coroutines.delay
@@ -152,10 +153,10 @@ fun MediaCard(
                 .width(width)
                 .height(height),
             shape = RoundedCornerShape(8.dp),
-            color = Color(0xFF2C2C2C),
+            color = SurfaceCard,
             border = BorderStroke(
                 width = if (isHighlighted) 2.dp else 1.dp,
-                color = if (focused) Color(0xFF0078D4) else if (hovered) Color(0x66FFFFFF) else Color(0x18FFFFFF)
+                color = if (focused) Accent else if (hovered) BorderDefault else BorderSubtle
             )
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
@@ -167,25 +168,25 @@ fun MediaCard(
                     contentScale = ContentScale.Crop,
                     loading = {
                         Box(
-                            modifier = Modifier.fillMaxSize().background(Color(0xFF242424)),
+                            modifier = Modifier.fillMaxSize().background(SurfaceLayer),
                             contentAlignment = Alignment.Center
                         ) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
-                                color = Color(0xFF0078D4),
+                                color = Accent,
                                 strokeWidth = 2.dp
                             )
                         }
                     },
                     error = {
                         Box(
-                            modifier = Modifier.fillMaxSize().background(Color(0xFF242424)),
+                            modifier = Modifier.fillMaxSize().background(SurfaceLayer),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = item.name.take(2).uppercase(),
                                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                                color = Color(0x66FFFFFF)
+                                color = TextTertiary
                             )
                         }
                     }
@@ -239,7 +240,7 @@ fun MediaCard(
                 fontWeight = FontWeight.Medium,
                 lineHeight = 15.sp
             ),
-            color = Color.White,
+            color = TextPrimary,
             fontSize = 12.sp,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
@@ -292,7 +293,7 @@ fun HeroBanner(
                     Box(
                         modifier = Modifier.fillMaxSize().background(
                             Brush.linearGradient(
-                                listOf(Color(0xFF1A1A3E), Color(0xFF2D1B69))
+                                listOf(SurfaceLayer, SurfaceCard)
                             )
                         )
                     )
@@ -331,7 +332,7 @@ fun HeroBanner(
                         .width(135.dp)
                         .height(200.dp),
                     shape = RoundedCornerShape(10.dp),
-                    color = Color(0xFF2C2C2C),
+                    color = SurfaceCard,
                     border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f))
                 ) {
                     SubcomposeAsyncImage(
@@ -341,10 +342,10 @@ fun HeroBanner(
                         contentScale = ContentScale.Crop,
                         error = {
                             Box(
-                                modifier = Modifier.fillMaxSize().background(Color(0xFF242424)),
+                                modifier = Modifier.fillMaxSize().background(SurfaceLayer),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.Movie, null, tint = Color.White.copy(0.4f), modifier = Modifier.size(36.dp))
+                                Icon(Icons.Default.Movie, null, tint = TextTertiary, modifier = Modifier.size(36.dp))
                             }
                         }
                     )
@@ -366,14 +367,14 @@ fun HeroBanner(
                     if (typeLabel != null) {
                         Surface(
                             shape = RoundedCornerShape(4.dp),
-                            color = Color(0xFF0078D4)
+                            color = Accent
                         ) {
                             Text(
                                 text = typeLabel,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = OnAccent
                             )
                         }
                         Spacer(Modifier.height(8.dp))
@@ -392,13 +393,13 @@ fun HeroBanner(
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Button(
                             onClick = { onItemClick(item) },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                            colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = OnAccent),
                             shape = RoundedCornerShape(8.dp),
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                         ) {
-                            Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.PlayArrow, null, tint = OnAccent, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text("Play Stream", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text("Play Stream", color = OnAccent, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
                         OutlinedButton(
                             onClick = { onItemClick(item) },
@@ -428,7 +429,7 @@ fun HeroBanner(
                             .size(if (i == currentIndex) 20.dp else 6.dp, 6.dp)
                             .clip(RoundedCornerShape(3.dp))
                             .background(
-                                if (i == currentIndex) Color(0xFF0078D4)
+                                if (i == currentIndex) MediaAccent
                                 else Color.White.copy(alpha = 0.4f)
                             )
                             .clickable { currentIndex = i }
@@ -453,7 +454,7 @@ fun ContinueWatchingCard(
             .height(130.dp)
             .clickable { onClick() },
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E2A))
+        colors = CardDefaults.cardColors(containerColor = SurfaceCard)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             // Poster Background Image
@@ -466,7 +467,7 @@ fun ContinueWatchingCard(
                     error = {
                         Box(
                             modifier = Modifier.fillMaxSize().background(
-                                Brush.linearGradient(listOf(Color(0xFF1A3A5C), Color(0xFF0D1B2A)))
+                                Brush.linearGradient(listOf(SurfaceCard, SurfaceBase))
                             )
                         )
                     }
@@ -474,7 +475,7 @@ fun ContinueWatchingCard(
             } else {
                 Box(
                     modifier = Modifier.fillMaxSize().background(
-                        Brush.linearGradient(listOf(Color(0xFF1A3A5C), Color(0xFF0D1B2A)))
+                        Brush.linearGradient(listOf(SurfaceCard, SurfaceBase))
                     )
                 )
             }
@@ -483,7 +484,7 @@ fun ContinueWatchingCard(
             Box(
                 modifier = Modifier.fillMaxSize().background(
                     Brush.verticalGradient(
-                        listOf(Color.Black.copy(alpha = 0.35f), Color.Black.copy(alpha = 0.90f))
+                        listOf(Color.Black.copy(alpha = 0.67f), Color.Black.copy(alpha = 0.90f))
                     )
                 )
             )
@@ -497,7 +498,7 @@ fun ContinueWatchingCard(
                     Icon(
                         Icons.Default.PlayCircle,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = MediaAccent,
                         modifier = Modifier.size(28.dp)
                     )
                     Spacer(Modifier.width(8.dp))
@@ -516,7 +517,7 @@ fun ContinueWatchingCard(
                     LinearProgressIndicator(
                         progress = { pct },
                         modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
-                        color = MaterialTheme.colorScheme.primary,
+                        color = MediaAccent,
                         trackColor = Color.White.copy(alpha = 0.3f)
                     )
                     Spacer(Modifier.height(4.dp))
@@ -561,10 +562,10 @@ fun TvTypeChips(
                 onClick = { onSelect(type) },
                 label = { Text(label, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
                 colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.primary,
-                    selectedLabelColor = Color.White,
-                    containerColor = Color(0xFF2A2A3A),
-                    labelColor = Color.LightGray
+                    selectedContainerColor = Accent,
+                    selectedLabelColor = OnAccent,
+                    containerColor = SurfaceCard,
+                    labelColor = TextSecondary
                 )
             )
         }
@@ -593,7 +594,7 @@ fun HomeLoadingShimmer(modifier: Modifier = Modifier) {
                 .fillMaxWidth()
                 .height(320.dp)
                 .clip(RoundedCornerShape(20.dp))
-                .background(Color.White.copy(alpha = alpha))
+                .background(TextPrimary.copy(alpha = alpha))
         )
         Spacer(Modifier.height(28.dp))
         // Row 1 placeholder
@@ -602,7 +603,7 @@ fun HomeLoadingShimmer(modifier: Modifier = Modifier) {
                 .width(140.dp)
                 .height(20.dp)
                 .clip(RoundedCornerShape(4.dp))
-                .background(Color.White.copy(alpha = alpha))
+                .background(TextPrimary.copy(alpha = alpha))
         )
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -612,7 +613,7 @@ fun HomeLoadingShimmer(modifier: Modifier = Modifier) {
                         .width(150.dp)
                         .height(225.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color.White.copy(alpha = alpha))
+                        .background(TextPrimary.copy(alpha = alpha))
                 )
             }
         }
@@ -646,7 +647,7 @@ fun TopLeftQualityBadge(item: SearchResponse, modifier: Modifier = Modifier) {
 
     if (qualityText != null) {
         val (bg, textColor) = when (qualityText.uppercase()) {
-            "4K" -> Pair(Color(0xFFD97706), Color.White)
+            "4K" -> Pair(Color(0xFFD97706), Color.Black)
             "1080P" -> Pair(Color(0xFF0078D4), Color.White)
             "720P" -> Pair(Color(0xFF107C41), Color.White)
             else -> Pair(Color.Black.copy(alpha = 0.75f), Color.White)
