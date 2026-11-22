@@ -47,20 +47,20 @@ private data class PresetRepo(
 
 private val PRESET_REPOSITORIES = listOf(
     PresetRepo(
-        name = "Nehal CloudStream Repo",
-        description = "Native BDIX, DiscoveryFTP, SamFTP & Bengali/Hindi streaming providers",
-        url = "https://raw.githubusercontent.com/nehalDIU/nehal-CloudStream/master/repo.json",
+        name = "CloudStream JVM Extensions",
+        description = "Optional desktop JVM extensions; download only when you choose Add",
+        url = "https://raw.githubusercontent.com/recloudstream/extensions/master/repo.json",
         isRecommended = true
     ),
     PresetRepo(
-        name = "CloudStream Official English Repo",
-        description = "Official English community extensions for movies, TV series and anime",
-        url = "https://raw.githubusercontent.com/recloudstream/cloudstream-extensions/master/repo.json"
+        name = "Reflex Repo",
+        description = "Community repository with desktop JVM builds",
+        url = "https://raw.githubusercontent.com/Reflex755/ReflexRepo/refs/heads/builds/repo.json"
     ),
     PresetRepo(
-        name = "CloudStream Multi-Language Repo",
-        description = "Multi-language providers for global streaming sources",
-        url = "https://raw.githubusercontent.com/recloudstream/cloudstream-extensions-multilingual/master/repo.json"
+        name = "saimuel repo",
+        description = "Community JVM builds; some listed extensions require Android",
+        url = "https://raw.githubusercontent.com/saimuelbr/saimuelrepo/refs/heads/main/builds/repo.json"
     )
 )
 

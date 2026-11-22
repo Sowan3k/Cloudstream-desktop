@@ -12,7 +12,7 @@ plugins {
 }
 
 group = "com.lagradost.cloudstream"
-version = "1.0.3"
+version = "1.0.4"
 
 kotlin {
     jvm("jvm")
@@ -85,9 +85,10 @@ compose.desktop {
 
         nativeDistributions {
             targetFormats(TargetFormat.Msi, TargetFormat.Exe)
-            packageName = "CloudStream Desktop"
-            packageVersion = "1.0.3"
-            vendor = "CloudStream Team"
+            packageName = "CloudStream Burgundy"
+            packageVersion = "1.0.4"
+            vendor = "Sowan3k / CloudStream contributors"
+            licenseFile.set(project.file("LICENSE"))
             description = "CloudStream Windows Desktop Application — High Performance Movies, TV Series & Anime Streamer"
             copyright = "© 2026 CloudStream Team"
 
@@ -98,10 +99,10 @@ compose.desktop {
 
             windows {
                 iconFile.set(project.file("src/jvmMain/resources/icon.ico"))
-                menuGroup = "CloudStream"
+                menuGroup = "CloudStream Burgundy"
                 menu = true
                 shortcut = true
-                upgradeUuid = "a2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e"
+                upgradeUuid = "c3a5231f-dac8-4f01-8314-566d38c53168"
                 dirChooser = true
                 perUserInstall = false
             }

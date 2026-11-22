@@ -1,132 +1,56 @@
-<div align="center">
+# CloudStream Burgundy
 
-  <img src="src/jvmMain/resources/icon.ico" width="96" height="96" alt="CloudStream Windows Logo" />
+A beta Windows desktop fork of [sheikhshariarnehal/Cloudstream-desktop](https://github.com/sheikhshariarnehal/Cloudstream-desktop), maintained by [Sowan3k](https://github.com/Sowan3k). Built with Kotlin, Compose Desktop and LibVLC. Original history, copyright notices and GPLv3 licensing are retained.
 
-  # CloudStream Desktop
+This fork adds the Burgundy Wine light/dark theme, playback and fullscreen fixes, buffering recovery, and disabled bundled-provider telemetry. See [changes](CHANGELOG.md), [playback details](docs/playback-fixes.md) and [third-party provenance](THIRD_PARTY.md).
 
-  **A modern, lightning-fast native Windows desktop application for CloudStream.**  
-  *Built with Kotlin, Compose Multiplatform & LibVLC.*
+## Beta download
 
-  [![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://cdn.ntechbd.app/cloudstream/CloudStream%20Desktop.msi)
-  [![Language](https://img.shields.io/badge/Kotlin-2.0-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org/)
-  [![Framework](https://img.shields.io/badge/Compose-Multiplatform-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white)](https://www.jetbrains.com/lp/compose-multiplatform/)
-  [![License](https://img.shields.io/badge/License-GPL%20v3.0-blue?style=for-the-badge)](LICENSE)
+Download the MSI and matching source bundle from [GitHub Releases](https://github.com/Sowan3k/Cloudstream-desktop/releases).
 
-  <br />
+- Installer: `CloudStream Burgundy-1.0.4.msi` (Windows 64-bit, Java runtime included).
+- Playback requires a matching 64-bit VLC installation. Local native checks used LibVLC 3.0.20.
+- The installer has a distinct Burgundy product identity. The app uses the existing `.cloudstream_desktop` profile format; back up that folder before switching builds.
+- This is a beta. Physical audio devices, every live provider, all GPU/driver combinations and clean-machine MSI installation are not fully verified.
 
-  <img src="home.webp" width="100%" alt="CloudStream Windows Desktop Preview" />
+## Providers and privacy
 
-</div>
+The build includes 15 source-built providers from a pinned upstream repository. All 14 distinct bundled analytics endpoints are disabled before provider construction. A loopback regression test proves a control event can be received and that usage events stop after disabling the trackers.
 
----
+Additional plugins remain optional. Open **Plugins > Repositories** to choose from the JVM repository presets. Downloads start only after you choose Add or Sync. [Repository notes](docs/repositories.md) list the previous registration results and known unsupported candidates.
 
-## 🌟 Overview
+User-installed plugins execute third-party code and can make their own network requests. They are not covered by the bundled-provider telemetry safeguard. No personal plugin directory, settings, credentials, watch history or downloaded media is included in this source repository or installer. Streaming rights and availability depend on the source.
 
-**CloudStream Desktop** brings the power of CloudStream to Windows 10 & 11 with a native desktop interface following Windows 11 Fluent UI guidelines. It combines multi-threaded media indexing, built-in VLC playback core, automatic subtitle fetching, and native BDIX FTP extension support into a single high-performance app.
+## Build from source
 
----
+Use Git and JDK 17. Clone the app and both pinned source dependencies into one parent directory:
 
-## ✨ Features
-
-- 🎨 **Fluent Dark Theme**: Windows 11 Acrylic surface cards, smooth micro-animations, and clean typography.
-- ⚡ **Multi-Threaded Stream Extractor**: Simultaneously queries video mirrors and automatically prioritizes 1080p / 4K high bitrate streams.
-- 🎬 **Embedded LibVLC Engine**: Plays HLS (m3u8), MP4, MKV, AVI, and WebM seamlessly with low CPU overhead.
-- 🔌 **BDIX & Plugin Ecosystem**: Native integration for BDIX FTP providers (CircleFTP, DiscoveryFTP, SamOnline, FTPBD, etc.) plus `.jar` plugin loaders.
-- ⌨️ **Full Keyboard & D-Pad Support**: Complete keyboard shortcuts for power users (`Space`, `Arrows`, `F11`, `Escape`, `Ctrl+F`, `Alt+1..5`).
-- 💬 **Multi-Language Subtitles**: Embedded subtitle track picker + automatic OpenSubtitles & Addic7ed search.
-- 🔖 **Watch History & Progress**: Automatically saves playback progress and continues from where you left off.
-- 📦 **Standalone Windows Installer**: Download direct `.msi` package with start menu shortcuts and clean installation.
-
----
-
-## ⌨️ Keyboard Shortcuts Reference
-
-| Shortcut | Action |
-|---|---|
-| **`Spacebar`** / **`K`** | Play / Pause video |
-| **`Left Arrow`** / **`J`** | Rewind 10 Seconds |
-| **`Right Arrow`** / **`L`** | Fast-Forward 10 Seconds |
-| **`Up Arrow`** / **`Down Arrow`** | Adjust Volume (+10% / -10%) |
-| **`M`** | Mute / Unmute audio |
-| **`F`** / **`F11`** | Toggle Fullscreen Mode |
-| **`Ctrl + F`** or **`/`** | Open Search Bar |
-| **`Alt + 1`** ... **`5`** | Switch Tabs (Home, Search, Library, Plugins, Settings) |
-| **`Escape`** / **`Backspace`** | Go Back to previous screen / Exit player |
-
----
-
-## 📥 Installation
-
-### Option 1: Direct MSI Installer (Recommended)
-Download the latest pre-built Windows 64-bit installer:
-
-👉 **[Download CloudStream Desktop (MSI)](https://cdn.ntechbd.app/cloudstream/CloudStream%20Desktop.msi)**
-
-Run `CloudStream Desktop.msi` to complete setup.
-
-### Option 2: Portable Build / Run from Source
-Prerequisites: JDK 17 or higher.
-
-The application includes its own Gradle 9.9.2 wrapper with a pinned SHA-256 distribution checksum. Kotlin 2.4.0's [fully supported Gradle range](https://kotlinlang.org/docs/gradle-configure-project.html) ends at 9.5.0; validate your build when changing either version. Existing plugins emit deprecation warnings.
-
-```bash
-# Clone all three repositories into one parent directory.
-# Exact dependency revisions are recorded in build-dependencies.json.
-git clone https://github.com/sheikhshariarnehal/Cloudstream-desktop.git Cloudstream-desktop-Application
+```powershell
+git clone --branch release/burgundy-beta https://github.com/Sowan3k/Cloudstream-desktop.git desktop
 git clone https://github.com/recloudstream/cloudstream.git cloudstream
 git -C cloudstream checkout --detach 2dcc25c3945c61dfa95d1710ced7c74acfe84baa
 git clone https://github.com/nehalDIU/nehal-CloudStream.git nehal-CloudStream
 git -C nehal-CloudStream checkout --detach 673f061d7a796a693cb744c218e9f4141a9867fe
-cd Cloudstream-desktop-Application
-
-# Run regression tests
-.\gradlew.bat jvmTest --max-workers=2
-
-# Run application locally
+cd desktop
+$env:JAVA_HOME = 'C:\Program Files\Java\jdk-17'
+.\gradlew.bat jvmTest --no-daemon --max-workers=2
 .\gradlew.bat run
-
-# Create MSI Installer Package
-.\gradlew.bat packageMsi --max-workers=2
+.\gradlew.bat packageMsi --no-daemon --max-workers=2
 ```
 
-The compiled MSI installer will be generated at:
-`build/compose/binaries/main/msi/CloudStream Desktop-1.0.3.msi`
+Adjust `JAVA_HOME` to your JDK 17 directory. The MSI appears in `build/compose/binaries/main/msi/`. The release source bundle includes the same `desktop`, `cloudstream` and `nehal-CloudStream` layout.
 
-Windows source builds also require a VLC installation matching the JVM architecture for playback. Provider registration and JVM tests do not verify every live provider or physical audio device. The Windows workflow checks out the same pinned dependencies, runs tests and packages the MSI.
+`build-dependencies.json` records the exact upstream revisions. The root Gradle 9.9.2 wrapper pins the distribution checksum; Windows CI uses the same dependency pins and runs JVM tests plus MSI packaging. Kotlin 2.4.0's [fully supported Gradle range](https://kotlinlang.org/docs/gradle-configure-project.html) ends at 9.5.0, so changing tool versions requires fresh validation. Existing plugins emit deprecation warnings.
 
----
+## Controls
 
-## 🏗️ Architecture & Project Structure
+- Space / K: play or pause; Left / J and Right / L: seek ten seconds.
+- Up / Down: volume; M: mute.
+- F / F11: player fullscreen; Escape: close a drawer, exit fullscreen or go back.
+- Player lock blocks playback shortcuts; drawer controls retain keyboard focus.
 
-```text
-src/jvmMain/kotlin/com/lagradost/cloudstream/desktop/
-├── Main.kt                 # Window entry point & global keyboard navigation
-├── plugins/                # Plugin loader & native BDIX provider bindings
-├── storage/                # Watch history & settings persistent data store
-├── ui/
-│   ├── components/         # Media cards, scroll listeners & UI primitives
-│   ├── navigation/         # Sidebar navigation state & screen routes
-│   ├── screens/
-│   │   ├── home/           # Main catalog & category feeds
-│   │   ├── search/         # Parallel provider search engine
-│   │   ├── result/         # Media details & link extractor launcher
-│   │   ├── player/         # LibVLC video player & control overlay
-│   │   ├── library/        # Saved watchlist & watch history
-│   │   ├── plugins/        # Local plugin installer & status
-│   │   └── settings/       # App preferences & theme configuration
-│   └── theme/              # Win11 color tokens & typography
-└── utils/                  # Stream proxy & Coil 3 image loader setup
-```
+## License and attribution
 
----
+This modified application is distributed under [GPLv3](LICENSE). Keep the original notices and provide corresponding source when redistributing binaries. [THIRD_PARTY.md](THIRD_PARTY.md) records the pinned core/provider provenance and the provider repository's public-domain declaration. Optional external plugins retain their own licenses.
 
-## 🛡️ License & Disclaimer
-
-- **License**: Released under the [GNU General Public License v3.0](LICENSE).
-- **Disclaimer**: CloudStream Desktop does not host, store, or transmit video content. It functions as an indexer and media player utilizing user-installed extensions and open APIs.
-
----
-
-<div align="center">
-  <sub>Built with ❤️ for the CloudStream community.</sub>
-</div>
+The Burgundy palette references [Serafim Cloud's Burgundy Wine theme](https://21st.dev/@serafimcloud/themes/burgundy-wine). This fork is not presented as an official upstream release.
