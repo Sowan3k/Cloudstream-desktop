@@ -10,7 +10,7 @@ Download the MSI and matching source bundle from [GitHub Releases](https://githu
 
 - Installer: `CloudStream Burgundy-1.0.4.msi` (Windows 64-bit, Java runtime included).
 - Playback requires a matching 64-bit VLC installation. Local native checks used LibVLC 3.0.20.
-- The installer has a distinct Burgundy product identity. The app uses the existing `.cloudstream_desktop` profile format; back up that folder before switching builds.
+- The installer has a distinct Burgundy product identity. Both builds share `%USERPROFILE%\.cloudstream_desktop`, including settings, history and installed plugins; back up that folder before switching builds.
 - This is a beta. Physical audio devices, every live provider, all GPU/driver combinations and clean-machine MSI installation are not fully verified.
 
 ## Providers and privacy
@@ -26,7 +26,7 @@ User-installed plugins execute third-party code and can make their own network r
 Use Git and JDK 17. Clone the app and both pinned source dependencies into one parent directory:
 
 ```powershell
-git clone --branch release/burgundy-beta https://github.com/Sowan3k/Cloudstream-desktop.git desktop
+git clone --branch v1.0.4-beta.1 https://github.com/Sowan3k/Cloudstream-desktop.git desktop
 git clone https://github.com/recloudstream/cloudstream.git cloudstream
 git -C cloudstream checkout --detach 2dcc25c3945c61dfa95d1710ced7c74acfe84baa
 git clone https://github.com/nehalDIU/nehal-CloudStream.git nehal-CloudStream

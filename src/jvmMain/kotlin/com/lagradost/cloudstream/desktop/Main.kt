@@ -65,7 +65,7 @@ fun main() {
 
         Window(
             onCloseRequest = ::exitApplication,
-            title = "CloudStream Windows Desktop",
+            title = "CloudStream Burgundy (Beta)",
             icon = painterResource("icon.png"),
             state = windowState,
             undecorated = true
@@ -193,7 +193,7 @@ fun main() {
                     // Custom dark title bar for windowed mode (hidden in Fullscreen)
                     if (!isFullscreen) {
                         CustomTitleBar(
-                            title = "CloudStream Windows Desktop",
+                            title = "CloudStream Burgundy (Beta)",
                             windowState = windowState,
                             onClose = ::exitApplication
                         )

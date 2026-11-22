@@ -87,7 +87,7 @@ compose.desktop {
             targetFormats(TargetFormat.Msi, TargetFormat.Exe)
             packageName = "CloudStream Burgundy"
             packageVersion = "1.0.4"
-            vendor = "Sowan3k / CloudStream contributors"
+            vendor = "Sowan3k"
             licenseFile.set(project.file("LICENSE"))
             description = "CloudStream Windows Desktop Application — High Performance Movies, TV Series & Anime Streamer"
             copyright = "© 2026 CloudStream Team"
